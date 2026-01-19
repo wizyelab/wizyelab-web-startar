@@ -1,0 +1,125 @@
+# =============================================================================
+# 生产环境配置 (Production)
+# 仅覆盖与基础配置不同的部分
+# =============================================================================
+
+server:
+  reload: false
+  workers: 4
+  log_level: "warning"
+
+app:
+  debug: false
+  secret_key: "${WIZYELAB_APP_SECRET_KEY}"
+
+# =============================================================================
+# 数据库配置 - 生产环境
+# =============================================================================
+database:
+  host: "pc-uf6q6w8i03g6g21v6.rwlb.rds.aliyuncs.com"
+  user: "wizzy_root"
+  password: "${WIZYELAB_DATABASE_PASSWORD}"
+  database: "wizyelab_dev"
+  echo: true  # 开发环境打印 SQL
+
+# =============================================================================
+# Redis 配置 - 开发环境
+# =============================================================================
+redis:
+  host: "redis-wizzy-test1.redis.rds.aliyuncs.com"
+  username: "wizzy_test_redis"
+  password: "${WIZYELAB_REDIS_PASSWORD}"
+
+# =============================================================================
+# LLM 配置 - 生产环境
+# =============================================================================
+llm:
+  api_key: "${WIZYELAB_LLM_API_KEY}"
+  langsmith_project: "wizyelab-agent-prod"
+  langsmith_tracing: false
+
+# =============================================================================
+# Agent 配置 - 生产环境
+# =============================================================================
+agent:
+  verbose: false
+  max_iterations: 8
+
+# =============================================================================
+# 日志配置 - 生产环境
+# =============================================================================
+logging:
+  level: "WARNING"
+  json_format: true
+  log_to_file: true
+  log_file_path: "/var/log/wizyelab/app.log"
+  log_max_size: 52428800  # 50MB
+  log_backup_count: 10
+
+# =============================================================================
+# 监控配置 - 生产环境
+# =============================================================================
+monitoring:
+  prometheus:
+    enabled: true
+  tracing:
+    enabled: true
+    service_name: "wizyelab-web-start-prod"
+    sample_rate: 0.1
+  health_check:
+    enabled: true
+    include_details: false
+
+# =============================================================================
+# 限流配置 - 生产环境
+# =============================================================================
+rate_limit:
+  enabled: true
+  default_limit: 60
+  default_window: 60
+  api_limits:
+    chat: 30
+    open: 100
+    internal: 200
+
+# =============================================================================
+# 缓存配置 - 生产环境
+# =============================================================================
+cache:
+  local:
+    enabled: true
+    max_size: 2000
+    ttl: 600
+  redis:
+    enabled: true
+    prefix: "wizyelab:prod:cache:"
+    default_ttl: 3600
+
+# =============================================================================
+# CORS 配置 - 生产环境（严格限制来源）
+# =============================================================================
+cors:
+  allow_origins:
+    - "https://www.wizyelab.com"
+    - "https://wizyelab.com"
+    - "https://admin.wizyelab.com"
+  allow_credentials: true
+  allow_methods:
+    - "GET"
+    - "POST"
+    - "PUT"
+    - "DELETE"
+  allow_headers:
+    - "Authorization"
+    - "Content-Type"
+    - "X-Request-ID"
+
+# =============================================================================
+# OSS 配置 - 生产环境
+# =============================================================================
+oss:
+  access_key_id: "${WIZYELAB_OSS_ACCESS_KEY_ID}"
+  access_key_secret: "${WIZYELAB_OSS_ACCESS_KEY_SECRET}"
+  endpoint: "oss-cn-shanghai-internal.aliyuncs.com"
+  bucket_name: "oss-wizzy-test"
+  region: "cn-shanghai"

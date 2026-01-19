@@ -1,0 +1,79 @@
+# =============================================================================
+# Docker Compose - 云部署环境 (Staging / Production)
+# 通过 WIZYELAB_ENV 环境变量区分环境
+# =============================================================================
+#
+# 使用方法:
+#   staging:  WIZYELAB_ENV=staging docker-compose -f docker-compose.cloud.yml up -d
+#   prod:     WIZYELAB_ENV=prod docker-compose -f docker-compose.cloud.yml up -d
+#
+# =============================================================================
+
+version: '3.8'
+
+services:
+  app:
+    image: registry.cn-hangzhou.aliyuncs.com/wizyelab/wizyelab-web-start:${IMAGE_TAG:-latest}
+    container_name: wizyelab-web-start-${WIZYELAB_ENV:-staging}
+    ports:
+      - "${APP_PORT:-8000}:8000"
+    environment:
+      - WIZYELAB_ENV=${WIZYELAB_ENV:-staging}
+      # 数据库配置
+      - WIZYELAB_DATABASE_HOST=${WIZYELAB_DATABASE_HOST}
+      - WIZYELAB_DATABASE_PORT=${WIZYELAB_DATABASE_PORT:-3306}
+      - WIZYELAB_DATABASE_USER=${WIZYELAB_DATABASE_USER}
+      - WIZYELAB_DATABASE_PASSWORD=${WIZYELAB_DATABASE_PASSWORD}
+      - WIZYELAB_DATABASE_NAME=${WIZYELAB_DATABASE_NAME:-wizyelab_${WIZYELAB_ENV:-staging}}
+      # Redis 配置
+      - WIZYELAB_REDIS_HOST=${WIZYELAB_REDIS_HOST}
+      - WIZYELAB_REDIS_PORT=${WIZYELAB_REDIS_PORT:-6379}
+      - WIZYELAB_REDIS_USERNAME=${WIZYELAB_REDIS_USERNAME}
+      - WIZYELAB_REDIS_PASSWORD=${WIZYELAB_REDIS_PASSWORD}
+      # OSS 配置
+      - WIZYELAB_OSS_ACCESS_KEY_ID=${WIZYELAB_OSS_ACCESS_KEY_ID}
+      - WIZYELAB_OSS_ACCESS_KEY_SECRET=${WIZYELAB_OSS_ACCESS_KEY_SECRET}
+      - WIZYELAB_OSS_ENDPOINT=${WIZYELAB_OSS_ENDPOINT}
+      - WIZYELAB_OSS_INTERNAL_ENDPOINT=${WIZYELAB_OSS_INTERNAL_ENDPOINT}
+      - WIZYELAB_OSS_BUCKET_NAME=${WIZYELAB_OSS_BUCKET_NAME}
+      # LLM 配置
+      - WIZYELAB_LLM_API_KEY=${WIZYELAB_LLM_API_KEY}
+      # 应用配置
+      - WIZYELAB_APP_SECRET_KEY=${WIZYELAB_APP_SECRET_KEY}
+    volumes:
+      - ${LOG_PATH:-./logs}:/app/logs
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/livez"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: ${HEALTH_START_PERIOD:-10s}
+    networks:
+      - wizyelab-network
+    restart: ${RESTART_POLICY:-unless-stopped}
+    deploy:
+      resources:
+        limits:
+          cpus: '${CPU_LIMIT:-2}'
+          memory: ${MEMORY_LIMIT:-2G}
+        reservations:
+          cpus: '${CPU_RESERVATION:-0.5}'
+          memory: ${MEMORY_RESERVATION:-512M}
+      replicas: ${REPLICAS:-1}
+      update_config:
+        parallelism: 1
+        delay: 10s
+        failure_action: rollback
+        order: start-first
+      rollback_config:
+        parallelism: 1
+        delay: 10s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "${LOG_MAX_SIZE:-100m}"
+        max-file: "${LOG_MAX_FILE:-3}"
+
+networks:
+  wizyelab-network:
+    driver: bridge

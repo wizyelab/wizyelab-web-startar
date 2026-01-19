@@ -1,0 +1,82 @@
+[tool.poetry]
+name = "wizyelab-web-start"
+version = "0.1.0"
+description = "FastAPI backend service with LangChain Agent"
+authors = ["Wizyelab Team <team@wizyelab.com>"]
+readme = "README.md"
+packages = [{include = "app"}, {include = "configs"}]
+
+[tool.poetry.dependencies]
+python = "^3.9"
+# FastAPI 框架
+fastapi = "^0.104.1"
+uvicorn = {extras = ["standard"], version = "^0.24.0"}
+pydantic = "^2.5.0"
+pydantic-settings = "^2.1.0"
+pyyaml = "^6.0.1"
+python-multipart = "^0.0.6"
+
+# 数据库
+sqlalchemy = {extras = ["asyncio"], version = "^2.0.23"}
+aiomysql = "^0.2.0"
+pymysql = "^1.1.0"
+alembic = "^1.13.0"
+
+# Redis
+redis = "^5.0.1"
+aioredis = "^2.0.1"
+
+# LangChain
+langchain = "^0.1.0"
+langchain-openai = "^0.0.2"
+langchain-community = "^0.0.10"
+langsmith = "^0.0.77"
+openai = "^1.6.1"
+
+# 监控
+prometheus-client = "^0.19.0"
+prometheus-fastapi-instrumentator = "^6.1.0"
+opentelemetry-api = "^1.22.0"
+opentelemetry-sdk = "^1.22.0"
+opentelemetry-instrumentation-fastapi = "^0.43b0"
+opentelemetry-exporter-prometheus = "^0.43b0"
+structlog = "^23.2.0"
+
+# 对象存储
+oss2 = "^2.18.0"
+
+# 工具库
+httpx = "^0.25.2"
+python-jose = {extras = ["cryptography"], version = "^3.3.0"}
+passlib = {extras = ["bcrypt"], version = "^1.7.4"}
+python-dotenv = "^1.0.0"
+tenacity = "^8.2.3"
+cachetools = "^5.3.2"
+
+[tool.poetry.group.dev.dependencies]
+pytest = "^7.4.3"
+pytest-asyncio = "^0.21.1"
+httpx = "^0.25.2"
+black = "^23.11.0"
+flake8 = "^6.1.0"
+mypy = "^1.7.0"
+pre-commit = "^3.6.0"
+pytest-cov = "^4.1.0"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
+
+[tool.black]
+line-length = 100
+target-version = ['py39']
+
+[tool.mypy]
+python_version = "3.9"
+warn_return_any = true
+warn_unused_configs = true
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["test"]

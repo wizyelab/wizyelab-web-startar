@@ -1,0 +1,165 @@
+# =============================================================================
+# Wizyelab Web Start 基础配置
+# 所有环境共享的默认配置，会被环境特定配置覆盖
+# =============================================================================
+
+server:
+  host: "0.0.0.0"
+  port: 8000
+  reload: false
+  workers: 1
+  log_level: "info"
+
+app:
+  name: "wizyelab-web-start"
+  version: "0.1.0"
+  debug: false
+  api_prefix: "/api"
+  secret_key: "change-this-in-production"
+  access_token_expire_minutes: 60
+
+# =============================================================================
+# 数据库配置 - PolarDB (MySQL 兼容)
+# =============================================================================
+database:
+  port: 3306
+  pool_size: 10
+  max_overflow: 20
+  pool_timeout: 30
+  pool_recycle: 1800
+  echo: false
+
+# =============================================================================
+# Redis 配置 - Tair
+# =============================================================================
+redis:
+  port: 6379
+  db: 0
+  max_connections: 50
+  decode_responses: true
+  socket_timeout: 5
+  socket_connect_timeout: 5
+
+# =============================================================================
+# LLM 配置
+# =============================================================================
+llm:
+  provider: "openai"
+  api_key: ""
+  api_base: ""
+  model: "gpt-4"
+  temperature: 0.7
+  max_tokens: 4096
+  request_timeout: 60
+  langsmith_api_key: ""
+  langsmith_project: "wizyelab-agent"
+  langsmith_tracing: false
+
+# =============================================================================
+# Agent 配置
+# =============================================================================
+agent:
+  max_iterations: 10
+  early_stopping_method: "generate"
+  verbose: false
+  memory_type: "buffer"
+  memory_k: 5
+
+# =============================================================================
+# 日志配置
+# =============================================================================
+logging:
+  level: "INFO"
+  format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+  json_format: true
+  log_to_file: false
+  log_file_path: "logs/app.log"
+  log_max_size: 10485760
+  log_backup_count: 5
+
+# =============================================================================
+# 监控配置
+# =============================================================================
+monitoring:
+  prometheus:
+    enabled: true
+    endpoint: "/metrics"
+  tracing:
+    enabled: false
+    service_name: "wizyelab-web-start"
+    otlp_endpoint: "http://localhost:4317"
+    sample_rate: 1.0
+  health_check:
+    enabled: true
+    endpoint: "/health"
+    include_details: true
+
+# =============================================================================
+# 限流配置
+# =============================================================================
+rate_limit:
+  enabled: true
+  default_limit: 60
+  default_window: 60
+  api_limits:
+    chat: 30
+    open: 100
+    internal: 200
+
+# =============================================================================
+# 缓存配置
+# =============================================================================
+cache:
+  local:
+    enabled: true
+    max_size: 1000
+    ttl: 300
+  redis:
+    enabled: true
+    prefix: "wizyelab:cache:"
+    default_ttl: 3600
+
+# =============================================================================
+# CORS 配置
+# =============================================================================
+cors:
+  allow_origins:
+    - "*"
+  allow_credentials: true
+  allow_methods:
+    - "*"
+  allow_headers:
+    - "*"
+
+# =============================================================================
+# 阿里云 OSS 配置
+# =============================================================================
+oss:
+  access_key_id: ""
+  access_key_secret: ""
+  endpoint: "oss-cn-hangzhou.aliyuncs.com"
+  bucket_name: ""
+  # 内网访问 endpoint（可选，用于阿里云内网访问）
+  internal_endpoint: ""
+  # 是否使用 HTTPS
+  use_https: true
+  # 连接超时（秒）
+  connect_timeout: 30
+  # 上传配置
+  upload:
+    # 分片上传阈值（字节），超过此大小使用分片上传
+    multipart_threshold: 10485760  # 10MB
+    # 分片大小（字节）
+    part_size: 10485760  # 10MB
+    # 并发上传线程数
+    num_threads: 4
+  # 下载配置
+  download:
+    # 分片下载阈值（字节）
+    multipart_threshold: 10485760  # 10MB
+    # 分片大小（字节）
+    part_size: 10485760  # 10MB
+    # 并发下载线程数
+    num_threads: 4
+  # URL 签名过期时间（秒）
+  url_expire_seconds: 3600

@@ -3,6 +3,7 @@
 import uvicorn
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
+from fastapi.responses import HTMLResponse
 
 from app.core.config import settings
 from app.api.router import api_router
@@ -95,7 +96,7 @@ app = FastAPI(
     description="Wizyelab AI-powered sports assistant API",
     lifespan=lifespan,
     docs_url="/docs" if settings.app.debug else None,
-    redoc_url="/redoc" if settings.app.debug else None,
+    redoc_url=None,  # 使用自定义 redoc 路由
 )
 
 # 设置中间件
@@ -109,6 +110,29 @@ setup_health_check(app)
 
 # 注册 API 路由
 app.include_router(api_router, prefix=settings.app.api_prefix)
+
+
+# 自定义 ReDoc 路由，使用国内 CDN
+if settings.app.debug:
+    @app.get("/redoc", include_in_schema=False)
+    async def custom_redoc():
+        return HTMLResponse("""
+<!DOCTYPE html>
+<html>
+<head>
+    <title>API Documentation - ReDoc</title>
+    <meta charset="utf-8"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <style>
+        body { margin: 0; padding: 0; }
+    </style>
+</head>
+<body>
+    <redoc spec-url='/openapi.json'></redoc>
+    <script src="https://registry.npmmirror.com/redoc/latest/files/bundles/redoc.standalone.js"></script>
+</body>
+</html>
+        """)
 
 
 @app.get("/")

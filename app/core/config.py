@@ -29,7 +29,7 @@ class AppConfig(BaseSettings):
     name: str = "wizyelab-web-start"
     version: str = "0.1.0"
     debug: bool = True
-    api_prefix: str = "/api"
+    api_prefix: str = "/joiiee/api"
     secret_key: str = "your-super-secret-key-change-in-production"
     access_token_expire_minutes: int = 60
 

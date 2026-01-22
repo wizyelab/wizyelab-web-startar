@@ -4,6 +4,7 @@ import uvicorn
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.responses import HTMLResponse
+from fastapi.openapi.docs import get_swagger_ui_html, get_redoc_html
 
 from app.core.config import settings
 from app.api.router import api_router
@@ -96,8 +97,8 @@ app = FastAPI(
     debug=settings.app.debug,
     description="Wizyelab AI-powered sports assistant API",
     lifespan=lifespan,
-    docs_url="/docs" if settings.app.debug else None,
-    redoc_url=None,  # 使用自定义 redoc 路由
+    docs_url=None,  # 禁用默认 docs，使用自定义路由
+    redoc_url=None,  # 禁用默认 redoc，使用自定义路由
 )
 
 # 设置中间件（注意：后添加的先执行）
@@ -114,27 +115,24 @@ setup_health_check(app)
 app.include_router(api_router, prefix=settings.app.api_prefix)
 
 
-# 自定义 ReDoc 路由，使用国内 CDN
+# 自定义 Swagger UI 路由，使用国内 CDN（解决服务器无法访问外网 CDN 的问题）
 if settings.app.debug:
+    @app.get("/docs", include_in_schema=False)
+    async def custom_swagger_ui():
+        return get_swagger_ui_html(
+            openapi_url="/openapi.json",
+            title=f"{settings.app.name} - Swagger UI",
+            swagger_js_url="https://registry.npmmirror.com/swagger-ui-dist/latest/files/swagger-ui-bundle.js",
+            swagger_css_url="https://registry.npmmirror.com/swagger-ui-dist/latest/files/swagger-ui.css",
+        )
+
     @app.get("/redoc", include_in_schema=False)
     async def custom_redoc():
-        return HTMLResponse("""
-<!DOCTYPE html>
-<html>
-<head>
-    <title>API Documentation - ReDoc</title>
-    <meta charset="utf-8"/>
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <style>
-        body { margin: 0; padding: 0; }
-    </style>
-</head>
-<body>
-    <redoc spec-url='/openapi.json'></redoc>
-    <script src="https://registry.npmmirror.com/redoc/latest/files/bundles/redoc.standalone.js"></script>
-</body>
-</html>
-        """)
+        return get_redoc_html(
+            openapi_url="/openapi.json",
+            title=f"{settings.app.name} - ReDoc",
+            redoc_js_url="https://registry.npmmirror.com/redoc/latest/files/bundles/redoc.standalone.js",
+        )
 
 
 @app.get("/")

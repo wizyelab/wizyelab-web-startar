@@ -14,7 +14,7 @@ app:
   name: "wizyelab-web-start"
   version: "0.1.0"
   debug: false
-  api_prefix: "joiiee/api"
+  api_prefix: "/joiiee/api"
   secret_key: "change-this-in-production"
   access_token_expire_minutes: 60
 

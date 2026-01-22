@@ -37,6 +37,7 @@ class Content(BaseModel):
         default=0, description="点击动作类型: 0-无动作, 1-跳转详情页, 2-跳转外链, 3-跳转视频上传"
     )
     action_url: str = Field(default="", description="跳转链接")
+    button_desc: str = Field(default="", description="展示button的文案，不为空时展示button")
     item_list: List[Item] = Field(default_factory=list, description="内容条目列表")
 
 

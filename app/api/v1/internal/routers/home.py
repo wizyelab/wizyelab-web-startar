@@ -37,6 +37,7 @@ def get_mock_tag_content_list_data(tag_id: int = 0) -> TagContentListData:
         cover_image="",
         action_type=1,
         action_url="/equipment/list",
+        button_desc="",
         item_list=[
             Item(
                 item_id="item_001",
@@ -78,6 +79,7 @@ def get_mock_tag_content_list_data(tag_id: int = 0) -> TagContentListData:
         cover_image="https://example.com/ai_analysis_cover.png",
         action_type=3,
         action_url="/upload/video",
+        button_desc="Upload New Video",
         item_list=[],
     )
 
@@ -100,6 +102,7 @@ def get_mock_tag_content_list_data(tag_id: int = 0) -> TagContentListData:
         cover_image="https://example.com/highlight_cover.png",
         action_type=1,
         action_url="/highlight/detail/content_003",
+        button_desc="Post",
         item_list=[],
     )
 
@@ -122,6 +125,7 @@ def get_mock_tag_content_list_data(tag_id: int = 0) -> TagContentListData:
         cover_image="https://example.com/trending_cover.png",
         action_type=2,
         action_url="https://youtube.com/watch?v=xxx",
+        button_desc="",
         item_list=[],
     )
 

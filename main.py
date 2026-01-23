@@ -53,9 +53,14 @@ async def lifespan(app: FastAPI):
 
     # 初始化 OSS
     try:
-        from app.infrastructure.storage.oss_client import init_oss
+        from app.infrastructure.storage.oss_client import init_oss, init_oss_cors
         init_oss()
         logger.info("OSS initialized")
+
+        # 设置 OSS CORS 规则（解决前端直传跨域问题）
+        # 生产环境建议限制具体域名，如 ['https://your-domain.com']
+        init_oss_cors(allowed_origins=settings.cors.allow_origins)
+        logger.info("OSS CORS rules configured")
     except Exception as e:
         logger.warning(f"Failed to initialize OSS: {e}")
 

@@ -787,6 +787,91 @@ class OSSClient:
             return f"{prefix}/{filename}"
         return filename
 
+    # ========================= CORS 配置 =========================
+
+    def set_bucket_cors(
+        self,
+        allowed_origins: Optional[List[str]] = None,
+        allowed_methods: Optional[List[str]] = None,
+        allowed_headers: Optional[List[str]] = None,
+        expose_headers: Optional[List[str]] = None,
+        max_age_seconds: int = 600
+    ) -> bool:
+        """
+        设置 Bucket CORS 规则（解决前端直传跨域问题）
+
+        Args:
+            allowed_origins: 允许的来源，默认 ['*']
+            allowed_methods: 允许的方法，默认 ['GET', 'POST', 'PUT', 'DELETE', 'HEAD']
+            allowed_headers: 允许的请求头，默认 ['*']
+            expose_headers: 暴露的响应头
+            max_age_seconds: 预检请求缓存时间
+
+        Returns:
+            是否成功
+        """
+        try:
+            from oss2.models import BucketCors, CorsRule
+
+            _allowed_origins = allowed_origins or ['*']
+            _allowed_methods = allowed_methods or ['GET', 'POST', 'PUT', 'DELETE', 'HEAD']
+            _allowed_headers = allowed_headers or ['*']
+            _expose_headers = expose_headers or ['ETag', 'x-oss-request-id', 'Content-Length']
+
+            rule = CorsRule(
+                allowed_origins=_allowed_origins,
+                allowed_methods=_allowed_methods,
+                allowed_headers=_allowed_headers,
+                expose_headers=_expose_headers,
+                max_age_seconds=max_age_seconds
+            )
+
+            cors = BucketCors([rule])
+            self.bucket.put_bucket_cors(cors)
+
+            logger.info(f"CORS rules set successfully for bucket, origins: {_allowed_origins}")
+            return True
+
+        except Exception as e:
+            logger.error(f"Failed to set CORS rules: {e}")
+            return False
+
+    def get_bucket_cors(self) -> Optional[List[dict]]:
+        """
+        获取当前 Bucket 的 CORS 规则
+
+        Returns:
+            CORS 规则列表
+        """
+        try:
+            cors = self.bucket.get_bucket_cors()
+            rules = []
+            for rule in cors.rules:
+                rules.append({
+                    'allowed_origins': rule.allowed_origins,
+                    'allowed_methods': rule.allowed_methods,
+                    'allowed_headers': rule.allowed_headers,
+                    'expose_headers': rule.expose_headers,
+                    'max_age_seconds': rule.max_age_seconds
+                })
+            return rules
+        except oss2.exceptions.NoSuchCors:
+            logger.info("No CORS rules configured for bucket")
+            return []
+        except Exception as e:
+            logger.error(f"Failed to get CORS rules: {e}")
+            return None
+
+    def delete_bucket_cors(self) -> bool:
+        """删除 Bucket 的 CORS 规则"""
+        try:
+            self.bucket.delete_bucket_cors()
+            logger.info("CORS rules deleted successfully")
+            return True
+        except Exception as e:
+            logger.error(f"Failed to delete CORS rules: {e}")
+            return False
+
 
 # 全局 OSS 客户端实例
 oss_client = OSSClient()
@@ -795,6 +880,21 @@ oss_client = OSSClient()
 def init_oss() -> None:
     """初始化全局 OSS 客户端"""
     oss_client.init()
+
+
+
+def init_oss_cors(allowed_origins: Optional[List[str]] = None) -> None:
+    """
+    初始化 OSS CORS 规则（解决前端直传跨域问题）
+
+    Args:
+        allowed_origins: 允许的来源列表，如 ['http://localhost:3000', 'https://example.com']
+                        默认为 ['*'] 允许所有来源
+    """
+    if not oss_client._initialized:
+        oss_client.init()
+    if oss_client._initialized:
+        oss_client.set_bucket_cors(allowed_origins=allowed_origins)
 
 
 def close_oss() -> None:

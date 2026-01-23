@@ -57,6 +57,10 @@ python-dotenv = "^1.0.0"
 tenacity = "^8.2.3"
 cachetools = "^5.3.2"
 
+# Firebase 和邮件服务
+firebase-admin = "^6.4.0"
+aiosmtplib = "^3.0.1"
+
 [tool.poetry.group.dev.dependencies]
 pytest = "^7.4.3"
 pytest-asyncio = "^0.21.1"

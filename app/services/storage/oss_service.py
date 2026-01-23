@@ -514,7 +514,7 @@ class OSSService:
         """
         config = settings.oss
         protocol = "https" if config.use_https else "http"
-        return f"{protocol}://{config.bucket_name}.{config.endpoint}/{key}"
+        return f"{protocol}://{config.file_host}/{key}"
 
     def get_signed_url(
         self,

@@ -204,6 +204,31 @@ class OSSConfig(BaseSettings):
     upload: OSSUploadConfig = Field(default_factory=OSSUploadConfig)
     download: OSSDownloadConfig = Field(default_factory=OSSDownloadConfig)
     url_expire_seconds: int = 3600  # 签名 URL 过期时间
+    file_host: str = "image.wizzyspot.com"  # 外网访问域名
+
+
+
+class FirebaseConfig(BaseSettings):
+    """Firebase 配置"""
+    project_id: str = ""
+    credentials_path: str = "firebase-credentials.json"
+
+
+class SMTPConfig(BaseSettings):
+    """SMTP 邮件配置"""
+    host: str = "smtp.gmail.com"
+    port: int = 587
+    user: str = ""
+    password: str = ""
+    from_email: str = ""
+    from_name: str = "Joiiee"
+    use_tls: bool = True
+
+
+class VerifyCodeConfig(BaseSettings):
+    """验证码配置"""
+    expire_minutes: int = 10
+    length: int = 6
 
 
 class Settings(BaseSettings):
@@ -247,6 +272,15 @@ class Settings(BaseSettings):
 
     # OSS 配置
     oss: OSSConfig = Field(default_factory=OSSConfig)
+
+    # Firebase 配置
+    firebase: FirebaseConfig = Field(default_factory=FirebaseConfig)
+
+    # SMTP 配置
+    smtp: SMTPConfig = Field(default_factory=SMTPConfig)
+
+    # 验证码配置
+    verify_code: VerifyCodeConfig = Field(default_factory=VerifyCodeConfig)
 
     # 兼容旧的属性访问方式
     @property
@@ -519,9 +553,22 @@ class Settings(BaseSettings):
                 connect_timeout=oss_data.get("connect_timeout", 30),
                 upload=OSSUploadConfig(**oss_data.get("upload", {})),
                 download=OSSDownloadConfig(**oss_data.get("download", {})),
-                url_expire_seconds=oss_data.get("url_expire_seconds", 3600)
+                url_expire_seconds=oss_data.get("url_expire_seconds", 3600),
+                file_host=oss_data.get("file_host", "image.wizzyspot.com")
             )
             config_dict["oss"] = oss_config
+
+        # Firebase 配置
+        if "firebase" in yaml_config:
+            config_dict["firebase"] = FirebaseConfig(**yaml_config["firebase"])
+
+        # SMTP 配置
+        if "smtp" in yaml_config:
+            config_dict["smtp"] = SMTPConfig(**yaml_config["smtp"])
+
+        # 验证码配置
+        if "verify_code" in yaml_config:
+            config_dict["verify_code"] = VerifyCodeConfig(**yaml_config["verify_code"])
 
         return config_dict
 

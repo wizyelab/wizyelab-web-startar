@@ -83,6 +83,27 @@ cors:
 oss:
   access_key_id: "${WIZYELAB_OSS_ACCESS_KEY_ID}"
   access_key_secret: "${WIZYELAB_OSS_ACCESS_KEY_SECRET}"
-  endpoint: "oss-cn-shanghai-internal.aliyuncs.com"
+  endpoint: "oss-cn-shanghai.aliyuncs.com"
+  internal_endpoint: "oss-cn-shanghai-internal.aliyuncs.com"
   bucket_name: "oss-wizzy-test"
   region: "cn-shanghai"
+  file_host: "image.wizzyspot.com"
+
+# =============================================================================
+# Firebase 配置 - 开发环境
+# =============================================================================
+firebase:
+  project_id: "${FIREBASE_PROJECT_ID}"
+  credentials_path: "${FIREBASE_CREDENTIALS_PATH}"
+
+# =============================================================================
+# SMTP 配置 - 开发环境
+# =============================================================================
+smtp:
+  host: "${SMTP_HOST}"
+  port: 587
+  user: "${SMTP_USER}"
+  password: "${SMTP_PASSWORD}"
+  from_email: "${SMTP_FROM_EMAIL}"
+  from_name: "Joiiee"
+  use_tls: true

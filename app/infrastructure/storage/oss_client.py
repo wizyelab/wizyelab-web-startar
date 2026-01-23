@@ -59,7 +59,7 @@ class OSSClient:
             self._auth = oss2.Auth(config.access_key_id, config.access_key_secret)
 
             # 确定使用的 endpoint
-            endpoint = config.internal_endpoint if config.internal_endpoint else config.endpoint
+            endpoint = config.endpoint
 
             # 添加协议前缀
             if config.use_https and not endpoint.startswith("https://"):
@@ -147,6 +147,7 @@ class OSSClient:
         progress_callback: Optional[callable] = None
     ) -> oss2.models.PutObjectResult:
         """异步上传对象"""
+        print(key, data, content_type)
         loop = asyncio.get_event_loop()
         return await loop.run_in_executor(
             self._executor,

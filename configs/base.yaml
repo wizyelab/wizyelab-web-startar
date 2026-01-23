@@ -150,9 +150,9 @@ oss:
     # 分片上传阈值（字节），超过此大小使用分片上传
     multipart_threshold: 10485760  # 10MB
     # 分片大小（字节）
-    part_size: 10485760  # 10MB
+    part_size: 104857600  # 100MB
     # 并发上传线程数
-    num_threads: 4
+    num_threads: 5
   # 下载配置
   download:
     # 分片下载阈值（字节）

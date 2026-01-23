@@ -8,7 +8,13 @@ from fastapi.responses import StreamingResponse
 
 from app.services.storage.oss_service import FileCategory, OSSService, oss_service
 
-from app.schemas.file import *
+from app.schemas.common import BaseResponse
+from app.schemas.file import (
+    UploadData, FileInfoData, SignedUrlData, UploadUrlData,
+    DeleteData, BatchDeleteData, FileExistsData,
+    SignedUrlRequest, UploadUrlRequest, BatchDeleteRequest
+)
+from typing import Optional, List
 
 
 router = APIRouter(prefix="/files", tags=["files"])
@@ -22,7 +28,7 @@ def get_oss_service() -> OSSService:
 
 # ========================= API 路由 =========================
 
-@router.post("/upload", response_model=UploadResponse)
+@router.post("/upload", response_model=BaseResponse[UploadData])
 async def upload_file(
     file: UploadFile = File(...),
     prefix: str = Form(default="uploads"),
@@ -43,27 +49,36 @@ async def upload_file(
             try:
                 _category = FileCategory(category)
             except ValueError:
-                raise HTTPException(
-                    status_code=400,
-                    detail=f"Invalid category: {category}. Valid values: {[c.value for c in FileCategory]}"
+                return BaseResponse(
+                    code=1,
+                    message=f"Invalid category: {category}. Valid values: {[c.value for c in FileCategory]}",
+                    data=None
                 )
 
         result = await service.upload_file(file, prefix=prefix, category=_category)
 
-        return UploadResponse(
-            key=result.key,
-            url=result.url,
-            filename=result.filename,
-            size=result.size,
-            content_type=result.content_type
+        return BaseResponse(
+            code=0,
+            message="上传成功",
+            data=UploadData(
+                key=result.key,
+                url=result.url,
+                filename=result.filename,
+                size=result.size,
+                content_type=result.content_type
+            )
         )
     except Exception as e:
-         raise HTTPException(status_code=500, detail=f"Upload failed: {str(e)}")
+        return BaseResponse(
+            code=1,
+            message=f"Upload failed: {str(e)}",
+            data=None
+        )
 
 
-@router.post("/upload/batch", response_model=List[UploadResponse])
+@router.post("/upload/batch", response_model=BaseResponse[List[UploadData]])
 async def upload_files(
-    files: List[UploadFile] = File(...),
+    files: list[UploadFile] = File(...),
     prefix: str = Form(default="uploads"),
     service: OSSService = Depends(get_oss_service)
 ):
@@ -77,7 +92,7 @@ async def upload_files(
     for file in files:
         try:
             result = await service.upload_file(file, prefix=prefix)
-            results.append(UploadResponse(
+            results.append(UploadData(
                 key=result.key,
                 url=result.url,
                 filename=result.filename,
@@ -85,11 +100,16 @@ async def upload_files(
                 content_type=result.content_type
             ))
         except Exception as e:
-            raise HTTPException(
-                status_code=500,
-                detail=f"Failed to upload {file.filename}: {str(e)}"
+            return BaseResponse(
+                code=1,
+                message=f"Failed to upload {file.filename}: {str(e)}",
+                data=None
             )
-    return results
+    return BaseResponse(
+        code=0,
+        message="批量上传成功",
+        data=results
+    )
 
 
 @router.get("/download/{key:path}")
@@ -136,7 +156,7 @@ async def download_file(
         raise HTTPException(status_code=500, detail=f"Download failed: {str(e)}")
 
 
-@router.get("/info/{key:path}", response_model=FileInfoResponse)
+@router.get("/info/{key:path}", response_model=BaseResponse[FileInfoData])
 async def get_file_info(
     key: str,
     service: OSSService = Depends(get_oss_service)
@@ -149,21 +169,31 @@ async def get_file_info(
     try:
         info = await service.get_file_info(key)
         if not info:
-            raise HTTPException(status_code=404, detail="File not found")
+            return BaseResponse(
+                code=1,
+                message="File not found",
+                data=None
+            )
 
-        return FileInfoResponse(
-            key=info.key,
-            size=info.size,
-            content_type=info.content_type,
-            last_modified=str(info.last_modified) if info.last_modified else None
+        return BaseResponse(
+            code=0,
+            message="获取成功",
+            data=FileInfoData(
+                key=info.key,
+                size=info.size,
+                content_type=info.content_type,
+                last_modified=str(info.last_modified) if info.last_modified else None
+            )
         )
-    except HTTPException:
-        raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to get file info: {str(e)}")
+        return BaseResponse(
+            code=1,
+            message=f"Failed to get file info: {str(e)}",
+            data=None
+        )
 
 
-@router.delete("/{key:path}", response_model=DeleteResponse)
+@router.delete("/{key:path}", response_model=BaseResponse[DeleteData])
 async def delete_file(
     key: str,
     service: OSSService = Depends(get_oss_service)
@@ -175,12 +205,20 @@ async def delete_file(
     """
     try:
         success = await service.delete_file(key)
-        return DeleteResponse(success=success, key=key)
+        return BaseResponse(
+            code=0,
+            message="删除成功",
+            data=DeleteData(success=success, key=key)
+        )
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Delete failed: {str(e)}")
+        return BaseResponse(
+            code=1,
+            message=f"Delete failed: {str(e)}",
+            data=None
+        )
 
 
-@router.post("/delete/batch", response_model=BatchDeleteResponse)
+@router.post("/delete/batch", response_model=BaseResponse[BatchDeleteData])
 async def batch_delete_files(
     request: BatchDeleteRequest,
     service: OSSService = Depends(get_oss_service)
@@ -192,12 +230,20 @@ async def batch_delete_files(
     """
     try:
         results = await service.delete_files(request.keys)
-        return BatchDeleteResponse(results=results)
+        return BaseResponse(
+            code=0,
+            message="批量删除成功",
+            data=BatchDeleteData(results=results)
+        )
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Batch delete failed: {str(e)}")
+        return BaseResponse(
+            code=1,
+            message=f"Batch delete failed: {str(e)}",
+            data=None
+        )
 
 
-@router.get("/list", response_model=List[FileInfoResponse])
+@router.get("/list", response_model=BaseResponse[List[FileInfoData]])
 async def list_files(
     prefix: str = Query(default="", description="路径前缀过滤"),
     max_keys: int = Query(default=100, le=1000, description="最大返回数量"),
@@ -213,8 +259,8 @@ async def list_files(
     """
     try:
         files = await service.list_files(prefix=prefix, max_keys=max_keys, marker=marker)
-        return [
-            FileInfoResponse(
+        file_list = [
+            FileInfoData(
                 key=f.key,
                 size=f.size,
                 content_type=f.content_type,
@@ -222,11 +268,20 @@ async def list_files(
             )
             for f in files
         ]
+        return BaseResponse(
+            code=0,
+            message="获取成功",
+            data=file_list
+        )
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"List files failed: {str(e)}")
+        return BaseResponse(
+            code=1,
+            message=f"List files failed: {str(e)}",
+            data=None
+        )
 
 
-@router.post("/signed-url", response_model=SignedUrlResponse)
+@router.post("/signed-url", response_model=BaseResponse[SignedUrlData])
 async def get_signed_url(
     request: SignedUrlRequest,
     service: OSSService = Depends(get_oss_service)
@@ -246,12 +301,20 @@ async def get_signed_url(
             for_download=request.for_download,
             filename=request.filename
         )
-        return SignedUrlResponse(url=url, expires_in=request.expires or 3600)
+        return BaseResponse(
+            code=0,
+            message="获取成功",
+            data=SignedUrlData(url=url, expires_in=request.expires or 3600)
+        )
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to generate signed URL: {str(e)}")
+        return BaseResponse(
+            code=1,
+            message=f"Failed to generate signed URL: {str(e)}",
+            data=None
+        )
 
 
-@router.post("/upload-url", response_model=UploadUrlResponse)
+@router.post("/upload-url", response_model=BaseResponse[UploadUrlData])
 async def get_upload_url(
     request: UploadUrlRequest,
     service: OSSService = Depends(get_oss_service)
@@ -290,16 +353,24 @@ async def get_upload_url(
             content_type=request.content_type
         )
 
-        return UploadUrlResponse(
-            key=key,
-            upload_url=upload_url,
-            expires_in=request.expires or 3600
+        return BaseResponse(
+            code=0,
+            message="获取成功",
+            data=UploadUrlData(
+                key=key,
+                upload_url=upload_url,
+                expires_in=request.expires or 3600
+            )
         )
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to generate upload URL: {str(e)}")
+        return BaseResponse(
+            code=1,
+            message=f"Failed to generate upload URL: {str(e)}",
+            data=None
+        )
 
 
-@router.get("/exists/{key:path}")
+@router.get("/exists/{key:path}", response_model=BaseResponse[FileExistsData])
 async def check_file_exists(
     key: str,
     service: OSSService = Depends(get_oss_service)
@@ -311,6 +382,14 @@ async def check_file_exists(
     """
     try:
         exists = await service.file_exists(key)
-        return {"exists": exists, "key": key}
+        return BaseResponse(
+            code=0,
+            message="检查成功",
+            data=FileExistsData(exists=exists, key=key)
+        )
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Check failed: {str(e)}")
+        return BaseResponse(
+            code=1,
+            message=f"Check failed: {str(e)}",
+            data=None
+        )

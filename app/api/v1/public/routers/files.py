@@ -36,8 +36,7 @@ async def upload_file(
     - **prefix**: 存储路径前缀，默认 "uploads"
     - **category**: 文件分类 (images/videos/audios/documents/others)，不指定则自动检测
     """
-    # try:
-    if 1 == 1::
+    try:
         # 解析分类
         _category = None
         if category:
@@ -58,8 +57,8 @@ async def upload_file(
             size=result.size,
             content_type=result.content_type
         )
-    # except Exception as e:
-    #     raise HTTPException(status_code=500, detail=f"Upload failed: {str(e)}")router
+    except Exception as e:
+         raise HTTPException(status_code=500, detail=f"Upload failed: {str(e)}")
 
 
 @router.post("/upload/batch", response_model=List[UploadResponse])

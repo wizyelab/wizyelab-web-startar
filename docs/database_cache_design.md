@@ -234,9 +234,9 @@ CREATE TABLE `posts` (
   `share_count` int(11) unsigned NOT NULL DEFAULT '0' COMMENT '分享数',
   `view_count` int(11) unsigned NOT NULL DEFAULT '0' COMMENT '浏览数',
   `status` tinyint(1) unsigned NOT NULL DEFAULT '1' COMMENT '状态：0-草稿，1-正常，2-隐藏，3-删除',
-  `source` varchar(50) NOT NULL DEFAULT 'ugc' COMMENT '来源：ugc/crawled',
+  `source` tinyint(1) NOT NULL DEFAULT '0' COMMENT '来源：0-ugc, 1-pgc, 2-crawled',
   `source_platform` varchar(50) DEFAULT NULL COMMENT '来源平台：YouTube/Amazon/Reddit',
-  `crawled_metadata` json DEFAULT NULL COMMENT '爬取元数据',
+  `source_metadata` json DEFAULT NULL COMMENT '爬取元数据',
   `extra` text COMMENT '扩展字段',
   `create_time` bigint(20) unsigned NOT NULL COMMENT '创建时间',
   `update_time` bigint(20) unsigned NOT NULL COMMENT '更新时间',
@@ -258,6 +258,7 @@ CREATE TABLE `post_tags` (
   `id` bigint(20) unsigned NOT NULL AUTO_INCREMENT COMMENT '自增主键',
   `post_id` varchar(36) NOT NULL COMMENT '帖子ID，关联posts.post_id',
   `tag_id` varchar(36) NOT NULL COMMENT '标签ID，关联tags.tag_id',
+  `extra` text COMMENT '扩展字段',
   `create_time` bigint(20) unsigned NOT NULL COMMENT '创建时间',
   `update_time` bigint(20) unsigned NOT NULL COMMENT '更新时间',
   PRIMARY KEY (`id`),
@@ -275,7 +276,7 @@ CREATE TABLE `comments` (
   `comment_id` varchar(36) NOT NULL COMMENT '评论ID（UUID）',
   `post_id` varchar(36) NOT NULL COMMENT '帖子ID，关联posts.post_id',
   `user_id` varchar(36) NOT NULL COMMENT '用户ID，关联users.user_id',
-  `parent_id` varchar(36) DEFAULT NULL COMMENT '父评论ID，关联comments.comment_id',
+  `parent_comment_id` varchar(36) DEFAULT NULL COMMENT '父评论ID，关联comments.comment_id',
   `reply_to_user_id` varchar(36) DEFAULT NULL COMMENT '回复的用户ID，关联users.user_id',
   `text` text NOT NULL COMMENT '评论内容',
   `level` tinyint(1) unsigned NOT NULL DEFAULT '0' COMMENT '评论层级：0-一级，1-二级',
@@ -289,7 +290,7 @@ CREATE TABLE `comments` (
   UNIQUE KEY `uk_comment_id` (`comment_id`),
   KEY `idx_post_id` (`post_id`),
   KEY `idx_user_id` (`user_id`),
-  KEY `idx_parent_id` (`parent_id`),
+  KEY `idx_parent_id` (`comment_parent_id`),
   KEY `idx_create_time` (`create_time`),
   KEY `idx_post_status_time` (`post_id`, `status`, `create_time`)
 ) ENGINE=InnoDB AUTO_INCREMENT=1 DEFAULT CHARSET=utf8mb4 COMMENT='评论表';
@@ -304,7 +305,7 @@ CREATE TABLE `user_actions` (
   `target_type` varchar(20) NOT NULL COMMENT '目标类型：post/comment',
   `target_id` varchar(36) NOT NULL COMMENT '目标ID（帖子或评论的UUID）',
   `action_type` tinyint(1) unsigned NOT NULL COMMENT '行为类型：0-浏览，1-点赞，2-收藏，3-分享',
-  `is_active` tinyint(1) unsigned NOT NULL DEFAULT '1' COMMENT '是否有效（用于取消）：0-否，1-是',
+  `status` tinyint(1) unsigned NOT NULL DEFAULT '1' COMMENT '是否有效（用于取消）：0-否，1-是',
   `extra` text COMMENT '扩展字段',
   `create_time` bigint(20) unsigned NOT NULL COMMENT '创建时间',
   `update_time` bigint(20) unsigned NOT NULL COMMENT '更新时间',
@@ -337,77 +338,6 @@ CREATE TABLE `user_feedbacks` (
   KEY `idx_status` (`status`),
   KEY `idx_feedback_type` (`feedback_type`)
 ) ENGINE=InnoDB AUTO_INCREMENT=1 DEFAULT CHARSET=utf8mb4 COMMENT='用户反馈表';
-```
-
----
-
-### 2.3 首页内容模块
-
-#### 2.3.1 home_contents - 首页内容配置表
-
-```sql
-CREATE TABLE `home_contents` (
-  `id` bigint(20) unsigned NOT NULL AUTO_INCREMENT COMMENT '自增主键',
-  `content_id` varchar(36) NOT NULL COMMENT '内容ID（UUID）',
-  `tag_id` varchar(36) NOT NULL COMMENT '关联的标签ID，关联tags.tag_id',
-  `content_type` tinyint(1) unsigned NOT NULL COMMENT '内容类型：0-默认，1-装备推荐，2-AI分析，3-高光时刻，4-推荐媒体',
-  `logo` varchar(500) DEFAULT NULL COMMENT 'logo图片',
-  `title` varchar(200) DEFAULT NULL COMMENT '标题',
-  `sub_title` varchar(200) DEFAULT NULL COMMENT '副标题',
-  `cover_image` varchar(500) DEFAULT NULL COMMENT '封面图',
-  `button_desc` varchar(50) DEFAULT NULL COMMENT '按钮文案',
-  `video_data` json DEFAULT NULL COMMENT '视频信息：{id,height,width,duration,cover_url,main_url,back_urls}',
-  `action_type` tinyint(1) unsigned NOT NULL DEFAULT '0' COMMENT '点击动作：0-无，1-详情页，2-外链，3-视频上传',
-  `action_url` varchar(500) DEFAULT NULL COMMENT '跳转链接',
-  `item_list` json DEFAULT NULL COMMENT '装备/内容条目列表',
-  `sort_order` int(11) NOT NULL DEFAULT '0' COMMENT '排序，数字越小越靠前',
-  `status` tinyint(1) unsigned NOT NULL DEFAULT '1' COMMENT '状态：0-禁用，1-启用',
-  `extra` text COMMENT '扩展字段',
-  `create_time` bigint(20) unsigned NOT NULL COMMENT '创建时间',
-  `update_time` bigint(20) unsigned NOT NULL COMMENT '更新时间',
-  PRIMARY KEY (`id`),
-  UNIQUE KEY `uk_content_id` (`content_id`),
-  KEY `idx_tag_id` (`tag_id`),
-  KEY `idx_content_type` (`content_type`),
-  KEY `idx_sort_order` (`sort_order`),
-  KEY `idx_status` (`status`)
-) ENGINE=InnoDB AUTO_INCREMENT=1 DEFAULT CHARSET=utf8mb4 COMMENT='首页内容配置表';
-```
-
-#### 2.3.2 equipments - 装备/商品表
-
-```sql
-CREATE TABLE `equipments` (
-  `id` bigint(20) unsigned NOT NULL AUTO_INCREMENT COMMENT '自增主键',
-  `equipment_id` varchar(36) NOT NULL COMMENT '装备ID（UUID）',
-  `name` varchar(200) NOT NULL COMMENT '装备名称',
-  `brand` varchar(100) DEFAULT NULL COMMENT '品牌',
-  `model` varchar(100) DEFAULT NULL COMMENT '型号',
-  `category` varchar(50) DEFAULT NULL COMMENT '类别：racket/shoes/bag等',
-  `img_urls` json DEFAULT NULL COMMENT '图片URL列表',
-  `video_data` json DEFAULT NULL COMMENT '介绍视频',
-  `price_min` decimal(10,2) DEFAULT NULL COMMENT '最低价',
-  `price_max` decimal(10,2) DEFAULT NULL COMMENT '最高价',
-  `price_display` varchar(50) DEFAULT NULL COMMENT '价格展示文本：$50-$80',
-  `description` text COMMENT '描述',
-  `rating` decimal(3,2) NOT NULL DEFAULT '0.00' COMMENT '评分',
-  `review_count` int(11) unsigned NOT NULL DEFAULT '0' COMMENT '评论数',
-  `tags` json DEFAULT NULL COMMENT '标签列表',
-  `specifications` json DEFAULT NULL COMMENT '规格参数',
-  `source_platform` varchar(50) DEFAULT NULL COMMENT '来源平台',
-  `source_url` varchar(500) DEFAULT NULL COMMENT '来源链接',
-  `source_id` varchar(100) DEFAULT NULL COMMENT '来源平台ID',
-  `status` tinyint(1) unsigned NOT NULL DEFAULT '1' COMMENT '状态：0-下架，1-上架',
-  `extra` text COMMENT '扩展字段',
-  `create_time` bigint(20) unsigned NOT NULL COMMENT '创建时间',
-  `update_time` bigint(20) unsigned NOT NULL COMMENT '更新时间',
-  PRIMARY KEY (`id`),
-  UNIQUE KEY `uk_equipment_id` (`equipment_id`),
-  KEY `idx_brand` (`brand`),
-  KEY `idx_category` (`category`),
-  KEY `idx_rating` (`rating`),
-  KEY `idx_source` (`source_platform`, `source_id`)
-) ENGINE=InnoDB AUTO_INCREMENT=1 DEFAULT CHARSET=utf8mb4 COMMENT='装备/商品表';
 ```
 
 ---
@@ -495,165 +425,8 @@ CREATE TABLE `guide_items` (
   `create_time` bigint(20) unsigned NOT NULL COMMENT '创建时间',
   `update_time` bigint(20) unsigned NOT NULL COMMENT '更新时间',
   PRIMARY KEY (`id`),
-  UNIQUE KEY `uk_guide_id` (`guide_id`),
   KEY `idx_sort_order` (`sort_order`)
 ) ENGINE=InnoDB AUTO_INCREMENT=1 DEFAULT CHARSET=utf8mb4 COMMENT='引导配置表';
-```
-
----
-
-### 2.6 爬虫数据模块
-
-#### 2.6.1 crawl_tasks - 爬虫任务表
-
-```sql
-CREATE TABLE `crawl_tasks` (
-  `id` bigint(20) unsigned NOT NULL AUTO_INCREMENT COMMENT '自增主键',
-  `task_id` varchar(36) NOT NULL COMMENT '任务ID（UUID）',
-  `task_type` varchar(20) NOT NULL COMMENT '任务类型：youtube/amazon/reddit',
-  `task_config` json DEFAULT NULL COMMENT '任务配置',
-  `status` varchar(20) NOT NULL DEFAULT 'pending' COMMENT '状态：pending/running/success/failed',
-  `error_message` text COMMENT '错误信息',
-  `retry_count` int(11) unsigned NOT NULL DEFAULT '0' COMMENT '重试次数',
-  `next_run_time` bigint(20) unsigned DEFAULT NULL COMMENT '下次运行时间',
-  `started_at` bigint(20) unsigned DEFAULT NULL COMMENT '开始时间',
-  `finished_at` bigint(20) unsigned DEFAULT NULL COMMENT '完成时间',
-  `extra` text COMMENT '扩展字段',
-  `create_time` bigint(20) unsigned NOT NULL COMMENT '创建时间',
-  `update_time` bigint(20) unsigned NOT NULL COMMENT '更新时间',
-  PRIMARY KEY (`id`),
-  UNIQUE KEY `uk_task_id` (`task_id`),
-  KEY `idx_task_type` (`task_type`),
-  KEY `idx_status` (`status`),
-  KEY `idx_next_run_time` (`next_run_time`)
-) ENGINE=InnoDB AUTO_INCREMENT=1 DEFAULT CHARSET=utf8mb4 COMMENT='爬虫任务表';
-```
-
-#### 2.6.2 crawled_raw_data - 爬取原始数据表
-
-```sql
-CREATE TABLE `crawled_raw_data` (
-  `id` bigint(20) unsigned NOT NULL AUTO_INCREMENT COMMENT '自增主键',
-  `task_id` varchar(36) DEFAULT NULL COMMENT '任务ID，关联crawl_tasks.task_id',
-  `platform` varchar(50) NOT NULL COMMENT '平台：youtube/amazon/reddit',
-  `data_type` varchar(50) DEFAULT NULL COMMENT '数据类型：video/product/post/comment',
-  `external_id` varchar(200) DEFAULT NULL COMMENT '外部平台ID',
-  `raw_data` json NOT NULL COMMENT '原始数据',
-  `is_processed` tinyint(1) unsigned NOT NULL DEFAULT '0' COMMENT '是否已处理：0-否，1-是',
-  `processed_at` bigint(20) unsigned DEFAULT NULL COMMENT '处理时间',
-  `extra` text COMMENT '扩展字段',
-  `create_time` bigint(20) unsigned NOT NULL COMMENT '创建时间',
-  `update_time` bigint(20) unsigned NOT NULL COMMENT '更新时间',
-  PRIMARY KEY (`id`),
-  UNIQUE KEY `uk_platform_external` (`platform`, `external_id`),
-  KEY `idx_platform` (`platform`),
-  KEY `idx_is_processed` (`is_processed`),
-  KEY `idx_task_id` (`task_id`)
-) ENGINE=InnoDB AUTO_INCREMENT=1 DEFAULT CHARSET=utf8mb4 COMMENT='爬取原始数据表';
-```
-
----
-
-### 2.7 AI分析模块
-
-#### 2.7.1 user_video_analysis - 用户视频分析表
-
-```sql
-CREATE TABLE `user_video_analysis` (
-  `id` bigint(20) unsigned NOT NULL AUTO_INCREMENT COMMENT '自增主键',
-  `analysis_id` varchar(36) NOT NULL COMMENT '分析ID（UUID）',
-  `user_id` varchar(36) NOT NULL COMMENT '用户ID，关联users.user_id',
-  `video_url` varchar(500) NOT NULL COMMENT '视频URL',
-  `video_data` json DEFAULT NULL COMMENT '视频信息',
-  `action_type` varchar(50) DEFAULT NULL COMMENT '动作类型：forehand/backhand/serve/volley/footwork',
-  `skeleton_data` json DEFAULT NULL COMMENT '骨架关键点数据',
-  `score` decimal(5,2) DEFAULT NULL COMMENT '动作评分',
-  `analysis_result` json DEFAULT NULL COMMENT '分析结果',
-  `correction_advice` json DEFAULT NULL COMMENT '纠正建议',
-  `similar_standard_videos` json DEFAULT NULL COMMENT '相似标准动作视频',
-  `highlight_video` json DEFAULT NULL COMMENT '生成的高光视频',
-  `status` varchar(20) NOT NULL DEFAULT 'pending' COMMENT '状态：pending/processing/completed/failed',
-  `error_message` text COMMENT '错误信息',
-  `completed_at` bigint(20) unsigned DEFAULT NULL COMMENT '完成时间',
-  `extra` text COMMENT '扩展字段',
-  `create_time` bigint(20) unsigned NOT NULL COMMENT '创建时间',
-  `update_time` bigint(20) unsigned NOT NULL COMMENT '更新时间',
-  PRIMARY KEY (`id`),
-  UNIQUE KEY `uk_analysis_id` (`analysis_id`),
-  KEY `idx_user_id` (`user_id`),
-  KEY `idx_status` (`status`),
-  KEY `idx_action_type` (`action_type`)
-) ENGINE=InnoDB AUTO_INCREMENT=1 DEFAULT CHARSET=utf8mb4 COMMENT='用户视频分析表';
-```
-
-#### 2.7.2 standard_actions - 标准动作库表
-
-```sql
-CREATE TABLE `standard_actions` (
-  `id` bigint(20) unsigned NOT NULL AUTO_INCREMENT COMMENT '自增主键',
-  `action_id` varchar(36) NOT NULL COMMENT '动作ID（UUID）',
-  `action_type` varchar(50) NOT NULL COMMENT '动作类型',
-  `action_name` varchar(100) NOT NULL COMMENT '动作名称',
-  `skeleton_template` json DEFAULT NULL COMMENT '标准骨架模板',
-  `video_url` varchar(500) DEFAULT NULL COMMENT '示例视频',
-  `video_data` json DEFAULT NULL COMMENT '视频信息',
-  `difficulty_level` varchar(20) DEFAULT NULL COMMENT '难度等级',
-  `description` text COMMENT '描述',
-  `tips` json DEFAULT NULL COMMENT '技巧提示',
-  `status` tinyint(1) unsigned NOT NULL DEFAULT '1' COMMENT '状态：0-禁用，1-启用',
-  `extra` text COMMENT '扩展字段',
-  `create_time` bigint(20) unsigned NOT NULL COMMENT '创建时间',
-  `update_time` bigint(20) unsigned NOT NULL COMMENT '更新时间',
-  PRIMARY KEY (`id`),
-  UNIQUE KEY `uk_action_id` (`action_id`),
-  KEY `idx_action_type` (`action_type`),
-  KEY `idx_difficulty_level` (`difficulty_level`)
-) ENGINE=InnoDB AUTO_INCREMENT=1 DEFAULT CHARSET=utf8mb4 COMMENT='标准动作库表';
-```
-
-#### 2.7.3 recommendation_logs - 推荐日志表
-
-```sql
-CREATE TABLE `recommendation_logs` (
-  `id` bigint(20) unsigned NOT NULL AUTO_INCREMENT COMMENT '自增主键',
-  `user_id` varchar(36) NOT NULL COMMENT '用户ID，关联users.user_id',
-  `target_type` varchar(20) NOT NULL COMMENT '目标类型：post/equipment',
-  `target_id` varchar(36) NOT NULL COMMENT '目标ID（帖子或装备的UUID）',
-  `scene` varchar(50) DEFAULT NULL COMMENT '场景：feed/search/related/chat',
-  `rank_score` decimal(10,6) DEFAULT NULL COMMENT '排序分数',
-  `evidence_chain` json DEFAULT NULL COMMENT '推荐证据链',
-  `is_impressed` tinyint(1) unsigned NOT NULL DEFAULT '0' COMMENT '是否曝光：0-否，1-是',
-  `is_clicked` tinyint(1) unsigned NOT NULL DEFAULT '0' COMMENT '是否点击：0-否，1-是',
-  `is_liked` tinyint(1) unsigned NOT NULL DEFAULT '0' COMMENT '是否点赞：0-否，1-是',
-  `extra` text COMMENT '扩展字段',
-  `create_time` bigint(20) unsigned NOT NULL COMMENT '创建时间',
-  `update_time` bigint(20) unsigned NOT NULL COMMENT '更新时间',
-  PRIMARY KEY (`id`),
-  KEY `idx_user_id` (`user_id`),
-  KEY `idx_target` (`target_type`, `target_id`),
-  KEY `idx_scene` (`scene`),
-  KEY `idx_create_time` (`create_time`),
-  KEY `idx_user_scene_time` (`user_id`, `scene`, `create_time`)
-) ENGINE=InnoDB AUTO_INCREMENT=1 DEFAULT CHARSET=utf8mb4 COMMENT='推荐日志表';
-```
-
-#### 2.7.4 content_embeddings - 内容向量表
-
-```sql
-CREATE TABLE `content_embeddings` (
-  `id` bigint(20) unsigned NOT NULL AUTO_INCREMENT COMMENT '自增主键',
-  `target_type` varchar(20) NOT NULL COMMENT '目标类型：post/equipment',
-  `target_id` varchar(36) NOT NULL COMMENT '目标ID（帖子或装备的UUID）',
-  `embedding_model` varchar(50) DEFAULT NULL COMMENT '模型名称',
-  `embedding_vector` blob COMMENT '向量数据',
-  `embedding_dimension` int(11) unsigned DEFAULT NULL COMMENT '向量维度',
-  `extra` text COMMENT '扩展字段',
-  `create_time` bigint(20) unsigned NOT NULL COMMENT '创建时间',
-  `update_time` bigint(20) unsigned NOT NULL COMMENT '更新时间',
-  PRIMARY KEY (`id`),
-  UNIQUE KEY `uk_target_model` (`target_type`, `target_id`, `embedding_model`),
-  KEY `idx_target` (`target_type`, `target_id`)
-) ENGINE=InnoDB AUTO_INCREMENT=1 DEFAULT CHARSET=utf8mb4 COMMENT='内容向量表';
 ```
 
 ---

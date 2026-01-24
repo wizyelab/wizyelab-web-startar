@@ -12,6 +12,7 @@ from app.schemas.common import BaseResponse
 from app.schemas.file import (
     UploadData, FileInfoData, SignedUrlData, UploadUrlData,
     DeleteData, BatchDeleteData, FileExistsData,
+    FileKeyRequest, DownloadRequest, FileListRequest,
     SignedUrlRequest, UploadUrlRequest, BatchDeleteRequest
 )
 from typing import Optional, List
@@ -112,10 +113,9 @@ async def upload_files(
     )
 
 
-@router.get("/download/{key:path}")
+@router.post("/download")
 async def download_file(
-    key: str,
-    filename: Optional[str] = Query(default=None, description="下载时的文件名"),
+    request: DownloadRequest,
     service: OSSService = Depends(get_oss_service)
 ):
     """
@@ -126,17 +126,17 @@ async def download_file(
     """
     try:
         # 检查文件是否存在
-        if not await service.file_exists(key):
+        if not await service.file_exists(request.key):
             raise HTTPException(status_code=404, detail="File not found")
 
         # 获取文件信息
-        file_info = await service.get_file_info(key)
+        file_info = await service.get_file_info(request.key)
 
         # 下载文件内容
-        content = await service.download_file(key)
+        content = await service.download_file(request.key)
 
         # 确定文件名
-        _filename = filename or key.split("/")[-1]
+        _filename = request.filename or request.key.split("/")[-1]
 
         # 确定内容类型
         content_type = file_info.content_type if file_info else "application/octet-stream"
@@ -156,9 +156,9 @@ async def download_file(
         raise HTTPException(status_code=500, detail=f"Download failed: {str(e)}")
 
 
-@router.get("/info/{key:path}", response_model=BaseResponse[FileInfoData])
+@router.post("/info", response_model=BaseResponse[FileInfoData])
 async def get_file_info(
-    key: str,
+    request: FileKeyRequest,
     service: OSSService = Depends(get_oss_service)
 ):
     """
@@ -167,7 +167,7 @@ async def get_file_info(
     - **key**: 文件的 OSS key
     """
     try:
-        info = await service.get_file_info(key)
+        info = await service.get_file_info(request.key)
         if not info:
             return BaseResponse(
                 code=1,
@@ -193,9 +193,9 @@ async def get_file_info(
         )
 
 
-@router.delete("/{key:path}", response_model=BaseResponse[DeleteData])
+@router.post("/delete", response_model=BaseResponse[DeleteData])
 async def delete_file(
-    key: str,
+    request: FileKeyRequest,
     service: OSSService = Depends(get_oss_service)
 ):
     """
@@ -204,11 +204,11 @@ async def delete_file(
     - **key**: 文件的 OSS key
     """
     try:
-        success = await service.delete_file(key)
+        success = await service.delete_file(request.key)
         return BaseResponse(
             code=0,
             message="删除成功",
-            data=DeleteData(success=success, key=key)
+            data=DeleteData(success=success, key=request.key)
         )
     except Exception as e:
         return BaseResponse(
@@ -243,11 +243,9 @@ async def batch_delete_files(
         )
 
 
-@router.get("/list", response_model=BaseResponse[List[FileInfoData]])
+@router.post("/list", response_model=BaseResponse[List[FileInfoData]])
 async def list_files(
-    prefix: str = Query(default="", description="路径前缀过滤"),
-    max_keys: int = Query(default=100, le=1000, description="最大返回数量"),
-    marker: str = Query(default="", description="起始位置标记"),
+    request: FileListRequest,
     service: OSSService = Depends(get_oss_service)
 ):
     """
@@ -258,7 +256,7 @@ async def list_files(
     - **marker**: 起始位置标记（用于分页）
     """
     try:
-        files = await service.list_files(prefix=prefix, max_keys=max_keys, marker=marker)
+        files = await service.list_files(prefix=request.prefix, max_keys=request.max_keys, marker=request.marker)
         file_list = [
             FileInfoData(
                 key=f.key,
@@ -370,9 +368,9 @@ async def get_upload_url(
         )
 
 
-@router.get("/exists/{key:path}", response_model=BaseResponse[FileExistsData])
+@router.post("/exists", response_model=BaseResponse[FileExistsData])
 async def check_file_exists(
-    key: str,
+    request: FileKeyRequest,
     service: OSSService = Depends(get_oss_service)
 ):
     """
@@ -381,11 +379,11 @@ async def check_file_exists(
     - **key**: 文件的 OSS key
     """
     try:
-        exists = await service.file_exists(key)
+        exists = await service.file_exists(request.key)
         return BaseResponse(
             code=0,
             message="检查成功",
-            data=FileExistsData(exists=exists, key=key)
+            data=FileExistsData(exists=exists, key=request.key)
         )
     except Exception as e:
         return BaseResponse(

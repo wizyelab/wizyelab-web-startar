@@ -55,6 +55,24 @@ class FileExistsData(BaseModel):
 
 # ========================= 请求模型 =========================
 
+class FileKeyRequest(BaseModel):
+    """文件key请求（通用）"""
+    key: str
+
+
+class DownloadRequest(BaseModel):
+    """下载请求"""
+    key: str
+    filename: Optional[str] = None
+
+
+class FileListRequest(BaseModel):
+    """文件列表请求"""
+    prefix: str = ""
+    max_keys: int = 100
+    marker: str = ""
+
+
 class SignedUrlRequest(BaseModel):
     """签名 URL 请求"""
     key: str

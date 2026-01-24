@@ -15,13 +15,11 @@ from app.core.config import settings
 from app.models.user import User, UserDevice, UserSession, generate_uuid, generate_user_id, current_timestamp_ms
 from app.services.firebase_service import firebase_service
 from app.services.email_service import email_service
+from app.services.auth_service import auth_service, SESSION_TTL
 from app.infrastructure.cache.redis_client import redis_client
 from app.schemas.account import ErrorCode, LoginData, UserInfo
 
 logger = setup_logger(__name__)
-
-# 从配置文件读取常量
-SESSION_TTL = 7 * 24 * 3600  # 7天
 
 
 class AccountService:

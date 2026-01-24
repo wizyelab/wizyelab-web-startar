@@ -14,4 +14,5 @@ def setup_cors(app: FastAPI):
         allow_credentials=settings.cors.allow_credentials,
         allow_methods=settings.cors.allow_methods,
         allow_headers=settings.cors.allow_headers,
+        expose_headers=settings.cors.expose_headers,
     )

@@ -176,6 +176,17 @@ class CORSConfig(BaseSettings):
     allow_credentials: bool = True
     allow_methods: List[str] = Field(default_factory=lambda: ["*"])
     allow_headers: List[str] = Field(default_factory=lambda: ["*"])
+    expose_headers: List[str] = Field(default_factory=lambda: ["X-Session-ID", "X-Request-ID", "X-Trace-ID", "X-Process-Time"])
+
+
+class SessionConfig(BaseSettings):
+    """Session 配置"""
+    ttl_days: int = 7  # Session 有效期（天）
+    cookie_name: str = "session_id"  # Cookie 名称
+    cookie_secure: bool = True  # 仅 HTTPS
+    cookie_httponly: bool = True  # 禁止 JS 访问
+    cookie_samesite: str = "lax"  # SameSite 策略
+    header_name: str = "X-Session-ID"  # Header 名称
 
 
 class OSSUploadConfig(BaseSettings):
@@ -275,6 +286,9 @@ class Settings(BaseSettings):
 
     # CORS 配置
     cors: CORSConfig = Field(default_factory=CORSConfig)
+
+    # Session 配置
+    session: SessionConfig = Field(default_factory=SessionConfig)
 
     # OSS 配置
     oss: OSSConfig = Field(default_factory=OSSConfig)

@@ -181,3 +181,4 @@ def generate_id() -> int:
 def generate_id_str() -> str:
     """生成雪花 ID（字符串）"""
     return snowflake.generate_str()
+

@@ -52,7 +52,7 @@ class LoginData(BaseModel):
 class SendVerifyCodeRequest(BaseModel):
     """发送验证码请求"""
 
-    mail_url: str = Field(..., description="接收验证码的邮箱地址")
+    email: str = Field(..., description="接收验证码的邮箱地址")
     device_info: Optional[DeviceInfo] = Field(default=None, description="设备信息")
 
 

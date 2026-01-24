@@ -3,7 +3,7 @@
 
 基于 database_cache_design.md 设计:
 - 使用 bigint 自增主键
-- 使用 UUID 作为业务ID
+- 使用雪花算法生成业务ID（数字格式）
 - 使用 bigint 存储毫秒级时间戳
 """
 
@@ -15,11 +15,17 @@ from sqlalchemy import Column, BigInteger, String, Text, SmallInteger, Index
 from sqlalchemy.dialects.mysql import TINYINT
 
 from app.infrastructure.database.connection import Base
+from app.core.snowflake import generate_id_str
 
 
 def generate_uuid() -> str:
-    """生成UUID字符串"""
+    """生成UUID字符串（保留用于 session_id 等）"""
     return str(uuid.uuid4())
+
+
+def generate_user_id() -> str:
+    """生成用户ID（雪花算法，数字字符串格式）"""
+    return generate_id_str()
 
 
 def current_timestamp_ms() -> int:
@@ -39,7 +45,7 @@ class User(Base):
     # 主键
     id = Column(BigInteger, primary_key=True, autoincrement=True, comment="自增主键")
     user_id = Column(
-        String(36), unique=True, nullable=False, default=generate_uuid, comment="用户ID（UUID）"
+        String(20), unique=True, nullable=False, default=generate_user_id, comment="用户ID（雪花算法）"
     )
 
     # Firebase相关
@@ -121,7 +127,7 @@ class UserDevice(Base):
     id = Column(BigInteger, primary_key=True, autoincrement=True, comment="自增主键")
 
     # 关联
-    user_id = Column(String(36), nullable=False, comment="用户ID，关联users.user_id")
+    user_id = Column(String(20), nullable=False, comment="用户ID，关联users.user_id")
     device_id = Column(String(100), nullable=False, comment="设备ID")
 
     # 设备信息
@@ -191,7 +197,7 @@ class UserSession(Base):
     )
 
     # 关联
-    user_id = Column(String(36), nullable=False, comment="用户ID，关联users.user_id")
+    user_id = Column(String(20), nullable=False, comment="用户ID，关联users.user_id")
     device_id = Column(String(100), nullable=False, comment="设备ID")
 
     # Token

@@ -12,7 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.logging import setup_logger
 from app.core.config import settings
-from app.models.user import User, UserDevice, UserSession, generate_uuid, current_timestamp_ms
+from app.models.user import User, UserDevice, UserSession, generate_uuid, generate_user_id, current_timestamp_ms
 from app.services.firebase_service import firebase_service
 from app.services.email_service import email_service
 from app.infrastructure.cache.redis_client import redis_client
@@ -39,7 +39,7 @@ class AccountService:
         时序图流程：
         1. 客户端请求授权URL → 第三方服务器
         2. 用户在第三方登录并授权
-        3. 第三方返回idToken
+        3. 第三方返回idToken TODO 这个idtoken是不是唯一的
         4. 客户端携带idToken进行auth认证 → Web Server
         5. Web Server验证idToken → Firebase Server
         6. Firebase返回解析的用户信息
@@ -69,7 +69,7 @@ class AccountService:
                 error_messages.get(error_type, "无效的登录凭证"),
                 None,
             )
-
+        logger.debug(decoded_token)
         firebase_uid = decoded_token.get("uid")
         email = decoded_token.get("email")
         name = decoded_token.get("name") or decoded_token.get("display_name")
@@ -136,6 +136,7 @@ class AccountService:
         """
         # 1. 校验验证码
         stored_code = await self._get_verify_code(email, device_id)
+        print(stored_code)
 
         if not stored_code:
             return ErrorCode.VERIFY_CODE_EXPIRED, "验证码已过期，请重新获取", None
@@ -313,10 +314,10 @@ class AccountService:
             firebase_uid: Firebase UID
             email: 邮箱
             user_name: 用户名
-            avatar: 头像
+            avatar: 头像   TODO 需要下载后再上传到阿里云换链接
             login_provider: 登录方式
 
-        Returns:
+        Returns:【
             用户对象
         """
         try:
@@ -354,7 +355,7 @@ class AccountService:
 
             # 创建新用户
             user = User(
-                user_id=generate_uuid(),
+                user_id=generate_user_id(),
                 firebase_uid=firebase_uid,
                 email=email,
                 user_name=user_name,
@@ -435,7 +436,19 @@ class AccountService:
             now = current_timestamp_ms()
             expires_at = now + (SESSION_TTL * 1000)  # 转换为毫秒
 
-            # 存储到Redis
+            # 1. 将该用户+设备的旧 session 置为无效
+            stmt = (
+                update(UserSession)
+                .where(
+                    UserSession.user_id == user_id,
+                    UserSession.device_id == device_id,
+                    UserSession.is_valid == 1,
+                )
+                .values(is_valid=0, update_time=now)
+            )
+            await self.db.execute(stmt)
+
+            # 2. 存储到Redis（会自动覆盖旧数据）
             session_key = f"session:{user_id}:{device_id}"
             session_data = {
                 "user_id": user_id,
@@ -445,7 +458,7 @@ class AccountService:
             }
             await redis_client.set_json(session_key, session_data, ex=SESSION_TTL)
 
-            # 持久化到数据库
+            # 3. 创建新 session
             session = UserSession(
                 session_id=generate_uuid(),
                 user_id=user_id,
@@ -461,6 +474,7 @@ class AccountService:
             return True
         except Exception as e:
             logger.error(f"创建会话失败: {e}")
+            await self.db.rollback()
             return False
 
     async def _delete_session(self, user_id: str, device_id: str) -> bool:
@@ -477,6 +491,7 @@ class AccountService:
         """存储验证码到Redis"""
         try:
             key = f"verify:{email}:{device_id}"
+            print(key)
             # 从配置读取过期时间（分钟转秒）
             ttl = settings.verify_code.expire_minutes * 60
             await redis_client.set(key, code, ex=ttl)

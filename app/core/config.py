@@ -231,6 +231,12 @@ class VerifyCodeConfig(BaseSettings):
     length: int = 6
 
 
+class SnowflakeConfig(BaseSettings):
+    """雪花算法配置"""
+    worker_id: int = 1  # 机器ID (0-31)
+    datacenter_id: int = 1  # 数据中心ID (0-31)
+
+
 class Settings(BaseSettings):
     """应用配置类，支持多环境配置和环境变量覆盖"""
 
@@ -281,6 +287,18 @@ class Settings(BaseSettings):
 
     # 验证码配置
     verify_code: VerifyCodeConfig = Field(default_factory=VerifyCodeConfig)
+
+    # 雪花算法配置
+    snowflake: SnowflakeConfig = Field(default_factory=SnowflakeConfig)
+
+    # 兼容旧的属性访问方式（雪花算法）
+    @property
+    def snowflake_worker_id(self) -> int:
+        return self.snowflake.worker_id
+
+    @property
+    def snowflake_datacenter_id(self) -> int:
+        return self.snowflake.datacenter_id
 
     # 兼容旧的属性访问方式
     @property
@@ -569,6 +587,10 @@ class Settings(BaseSettings):
         # 验证码配置
         if "verify_code" in yaml_config:
             config_dict["verify_code"] = VerifyCodeConfig(**yaml_config["verify_code"])
+
+        # 雪花算法配置
+        if "snowflake" in yaml_config:
+            config_dict["snowflake"] = SnowflakeConfig(**yaml_config["snowflake"])
 
         return config_dict
 

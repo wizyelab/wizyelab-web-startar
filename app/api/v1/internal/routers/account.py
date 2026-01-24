@@ -84,7 +84,7 @@ async def send_verify_code(
 
     account_service = AccountService(db)
     code, message = await account_service.send_verify_code(
-        email=request.mail_url,
+        email=request.email,
         device_id=device_id,
     )
 

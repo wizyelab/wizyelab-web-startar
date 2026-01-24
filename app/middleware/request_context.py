@@ -2,7 +2,7 @@
 请求上下文中间件
 
 功能：
-1. 解析请求 Header 中的关键参数（x-request-id, x-trace-id, x-user-id 等）
+1. 解析请求 Header 中的关键参数（x-request-id, x-trace-id 等）
 2. 生成 trace_id 用于链路追踪
 3. 提供全局请求上下文，其他代码可随时访问
 4. 在响应 Header 中添加追踪信息
@@ -11,7 +11,6 @@
 """
 
 import time
-import uuid
 from contextvars import ContextVar
 from dataclasses import dataclass, field
 from typing import Callable, Optional, Dict, Any
@@ -24,6 +23,10 @@ from app.core.snowflake import generate_id_str
 from app.core.config import settings
 
 logger = setup_logger(__name__)
+
+# Session Header/Cookie 名称（小写用于 Header 匹配）
+SESSION_HEADER_KEY = settings.session.header_name.lower()
+SESSION_COOKIE_KEY = settings.session.cookie_name
 
 
 @dataclass
@@ -53,6 +56,9 @@ class RequestContext:
     method: str = ""              # 请求方法
     path: str = ""                # 请求路径
     start_time: float = 0.0       # 请求开始时间
+
+    # Session 响应标志
+    _new_session_id: str = ""     # 登录成功后需要设置到响应的 session_id
 
     # 扩展数据
     extra: Dict[str, Any] = field(default_factory=dict)
@@ -132,12 +138,6 @@ def get_session_id() -> str:
     return ctx.session_id if ctx else ""
 
 
-# 用于在登录成功后设置 session_id 到响应中
-_pending_session_id: ContextVar[Optional[str]] = ContextVar(
-    "pending_session_id", default=None
-)
-
-
 def set_session_id_for_response(session_id: str) -> None:
     """
     设置 session_id，将在响应时添加到 Header 和 Cookie
@@ -150,11 +150,10 @@ def set_session_id_for_response(session_id: str) -> None:
         # 登录成功后
         set_session_id_for_response(session_id)
     """
-    _pending_session_id.set(session_id)
-    # 同时更新当前上下文
     ctx = get_request_context()
     if ctx:
         ctx.session_id = session_id
+        ctx._new_session_id = session_id
 
 
 class RequestContextMiddleware(BaseHTTPMiddleware):
@@ -214,7 +213,6 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
 
         # 设置上下文变量
         token = _request_context.set(ctx)
-        pending_token = _pending_session_id.set(None)
 
         try:
             # 处理请求
@@ -228,10 +226,9 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
             response.headers["X-Trace-ID"] = ctx.trace_id
             response.headers["X-Process-Time"] = str(process_time_ms)
 
-            # 如果有待设置的 session_id（登录成功），添加到响应
-            pending_session = _pending_session_id.get()
-            if pending_session:
-                self._set_session_response(response, pending_session)
+            # 如果有新的 session_id（登录成功），添加到响应
+            if ctx._new_session_id:
+                self._set_session_response(response, ctx._new_session_id)
 
             return response
 
@@ -243,7 +240,6 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
         finally:
             # 重置上下文
             _request_context.reset(token)
-            _pending_session_id.reset(pending_token)
 
     def _build_context(self, request: Request) -> RequestContext:
         """从请求中构建上下文"""
@@ -289,11 +285,11 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
             return
 
         # 1. 优先从 Header 获取 session_id
-        session_id = request.headers.get(settings.session.header_name.lower(), "")
+        session_id = request.headers.get(SESSION_HEADER_KEY, "")
 
         # 2. 如果 Header 没有，从 Cookie 获取
         if not session_id:
-            session_id = request.cookies.get(settings.session.cookie_name, "")
+            session_id = request.cookies.get(SESSION_COOKIE_KEY, "")
 
         if not session_id:
             return
@@ -331,7 +327,7 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
         # 设置 Cookie（Web 端使用）
         max_age = settings.session.ttl_days * 24 * 3600
         response.set_cookie(
-            key=settings.session.cookie_name,
+            key=SESSION_COOKIE_KEY,
             value=session_id,
             max_age=max_age,
             httponly=settings.session.cookie_httponly,

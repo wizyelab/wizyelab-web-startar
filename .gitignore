@@ -69,3 +69,5 @@ dmypy.json
 # Project specific
 app.db
 
+# firebase credentials
+joiiee-firebase-credentials.json

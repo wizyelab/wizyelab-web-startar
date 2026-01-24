@@ -10,6 +10,7 @@ from app.api.router import api_router
 from app.middleware.cors import setup_cors
 from app.middleware.request_logging import LoggingMiddleware
 from app.middleware.rate_limit import setup_rate_limit
+from app.middleware.request_context import RequestContextMiddleware
 from app.infrastructure.monitoring.metrics import setup_metrics
 from app.infrastructure.monitoring.health import setup_health_check
 from app.core.logging import setup_logger
@@ -99,10 +100,11 @@ app = FastAPI(
     redoc_url=None,  # 使用自定义 redoc 路由
 )
 
-# 设置中间件
+# 设置中间件（注意：后添加的先执行）
 setup_cors(app)
 setup_rate_limit(app)  # 限流中间件
 app.add_middleware(LoggingMiddleware)
+app.add_middleware(RequestContextMiddleware)  # 请求上下文（最先执行）
 
 # 设置监控
 setup_metrics(app)

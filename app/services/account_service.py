@@ -16,6 +16,7 @@ from app.models.user import User, UserDevice, UserSession, generate_uuid, genera
 from app.services.firebase_service import firebase_service
 from app.services.email_service import email_service
 from app.services.auth_service import auth_service, SESSION_TTL
+from app.middleware.request_context import set_session_id_for_response
 from app.infrastructure.cache.redis_client import redis_client
 from app.schemas.account import ErrorCode, LoginData, UserInfo
 
@@ -418,7 +419,7 @@ class AccountService:
 
     async def _create_session(
         self, user_id: str, device_id: str, custom_token: Optional[str]
-    ) -> bool:
+    ) -> Optional[str]:
         """
         创建用户会话
 
@@ -428,13 +429,16 @@ class AccountService:
             custom_token: 自定义Token
 
         Returns:
-            是否成功
+            session_id，失败返回 None
         """
         try:
             now = current_timestamp_ms()
             expires_at = now + (SESSION_TTL * 1000)  # 转换为毫秒
 
-            # 1. 将该用户+设备的旧 session 置为无效
+            # 1. 删除该用户+设备的旧 session（Redis）
+            await auth_service.delete_user_sessions(user_id, device_id)
+
+            # 2. 将数据库中该用户+设备的旧 session 置为无效
             stmt = (
                 update(UserSession)
                 .where(
@@ -446,19 +450,26 @@ class AccountService:
             )
             await self.db.execute(stmt)
 
-            # 2. 存储到Redis（会自动覆盖旧数据）
-            session_key = f"session:{user_id}:{device_id}"
-            session_data = {
-                "user_id": user_id,
-                "device_id": device_id,
+            # 3. 生成新的 session_id 并存储到 Redis
+            session_id = auth_service.generate_session_id()
+            extra_data = {
                 "custom_token": custom_token or "",
                 "created_at": now,
             }
-            await redis_client.set_json(session_key, session_data, ex=SESSION_TTL)
+            success = await auth_service.create_session(
+                session_id=session_id,
+                user_id=user_id,
+                device_id=device_id,
+                extra_data=extra_data,
+            )
 
-            # 3. 创建新 session
+            if not success:
+                logger.error("Redis session 创建失败")
+                return None
+
+            # 4. 创建新 session 记录到数据库
             session = UserSession(
-                session_id=generate_uuid(),
+                session_id=session_id,
                 user_id=user_id,
                 device_id=device_id,
                 custom_token=custom_token,
@@ -469,17 +480,21 @@ class AccountService:
             self.db.add(session)
             await self.db.commit()
 
-            return True
+            # 5. 设置 session_id 到响应（中间件会自动添加到 Header 和 Cookie）
+            set_session_id_for_response(session_id)
+
+            logger.info(f"会话创建成功: session_id={session_id}, user_id={user_id}")
+            return session_id
+
         except Exception as e:
             logger.error(f"创建会话失败: {e}")
             await self.db.rollback()
-            return False
+            return None
 
     async def _delete_session(self, user_id: str, device_id: str) -> bool:
         """删除Redis会话"""
         try:
-            session_key = f"session:{user_id}:{device_id}"
-            await redis_client.delete(session_key)
+            await auth_service.delete_user_sessions(user_id, device_id)
             return True
         except Exception as e:
             logger.error(f"删除会话失败: {e}")

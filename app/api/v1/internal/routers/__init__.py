@@ -5,3 +5,4 @@ from . import home
 from . import detail
 from . import profile
 from . import account
+from . import chat

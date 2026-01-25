@@ -16,6 +16,9 @@ from app.schemas.home import (
     ActionData,
     GenerateShareLinkRequest,
     ShareData,
+    SuggestedPromptsRequest,
+    SuggestedPromptsData,
+    SuggestedPrompt,
 )
 
 router = APIRouter(prefix="/home", tags=["home"])
@@ -313,5 +316,64 @@ async def generate_share_link(request: GenerateShareLinkRequest):
         share_url=f"https://joiiee.com/share/{request.post_id}?t=abc123",
         share_text="I'm so excited - Great match today!",
         share_image="https://example.com/thumb_001.png",
+    )
+    return BaseResponse(code=0, message="正确", data=data)
+
+
+@router.post("/suggested_prompts", response_model=BaseResponse[SuggestedPromptsData])
+async def get_suggested_prompts(request: SuggestedPromptsRequest):
+    """
+    获取基于上下文的推荐提示词
+
+    用于非对话场景（如首页卡片、详情页等）引导用户开启对话
+    scene_type: 0-通用, 1-装备推荐, 2-AI分析, 3-高光时刻, 4-推荐媒体
+    """
+    # 根据场景类型生成不同的推荐提示词
+    prompts_map = {
+        0: [  # 通用
+            SuggestedPrompt(id="sp_001", text="帮我推荐一下", prompt_type=0, icon=""),
+            SuggestedPrompt(id="sp_002", text="有什么建议", prompt_type=0, icon=""),
+            SuggestedPrompt(id="sp_003", text="详细介绍一下", prompt_type=2, icon=""),
+        ],
+        1: [  # 装备推荐
+            SuggestedPrompt(
+                id="sp_001", text="推荐一款适合新手的球拍", prompt_type=0, icon="racket"
+            ),
+            SuggestedPrompt(
+                id="sp_002", text="这几款球拍有什么区别", prompt_type=2, icon="compare"
+            ),
+            SuggestedPrompt(
+                id="sp_003", text="预算500以内有什么推荐", prompt_type=1, icon="price"
+            ),
+        ],
+        2: [  # AI分析
+            SuggestedPrompt(
+                id="sp_001", text="分析一下我的动作", prompt_type=0, icon="analysis"
+            ),
+            SuggestedPrompt(
+                id="sp_002", text="如何改进正手击球", prompt_type=2, icon="improve"
+            ),
+            SuggestedPrompt(id="sp_003", text="对比职业选手动作", prompt_type=2, icon="compare"),
+        ],
+        3: [  # 高光时刻
+            SuggestedPrompt(id="sp_001", text="生成更多高光", prompt_type=0, icon="highlight"),
+            SuggestedPrompt(id="sp_002", text="分享到社交媒体", prompt_type=3, icon="share"),
+            SuggestedPrompt(id="sp_003", text="编辑这个视频", prompt_type=1, icon="edit"),
+        ],
+        4: [  # 推荐媒体
+            SuggestedPrompt(id="sp_001", text="推荐更多类似内容", prompt_type=0, icon="more"),
+            SuggestedPrompt(id="sp_002", text="这个视频讲了什么", prompt_type=2, icon="summary"),
+            SuggestedPrompt(id="sp_003", text="有其他教程推荐吗", prompt_type=3, icon="tutorial"),
+        ],
+    }
+
+    prompts = prompts_map.get(request.scene_type, prompts_map[0])
+    # 根据 count 参数限制返回数量
+    prompts = prompts[: request.count]
+
+    data = SuggestedPromptsData(
+        prompts=prompts,
+        scene_type=request.scene_type,
+        content_id=request.content_id,
     )
     return BaseResponse(code=0, message="正确", data=data)

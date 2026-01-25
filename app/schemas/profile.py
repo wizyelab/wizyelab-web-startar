@@ -127,6 +127,7 @@ class CreatePostRequest(BaseModel):
     description: str = Field(default="", max_length=2000, description="描述/正文")
     content: str = Field(default="", description="内容")
     img_urls: List[str] = Field(default_factory=list, description="图片URL列表")
+    video: Optional[Video] = Field(default=None, description="视频信息")
     tags: List[int] = Field(default_factory=list, description="标签ID列表")
 
 

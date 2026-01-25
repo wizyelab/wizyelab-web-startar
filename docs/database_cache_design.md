@@ -228,7 +228,7 @@ CREATE TABLE `posts` (
   `content` text COMMENT '内容正文',
   `thumbnail_url` varchar(500) DEFAULT NULL COMMENT '缩略图URL',
   `img_urls` json DEFAULT NULL COMMENT '图片URL列表',
-  `video_data` json DEFAULT NULL COMMENT '视频信息：{id,height,width,duration,cover_url,main_url,back_urls}',
+  `video` json DEFAULT NULL COMMENT '视频信息：{id,height,width,duration,cover_url,main_url,back_urls}',
   `like_count` int(11) unsigned NOT NULL DEFAULT '0' COMMENT '点赞数',
   `comment_count` int(11) unsigned NOT NULL DEFAULT '0' COMMENT '评论数',
   `share_count` int(11) unsigned NOT NULL DEFAULT '0' COMMENT '分享数',

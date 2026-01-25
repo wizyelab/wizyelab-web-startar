@@ -140,3 +140,36 @@ class ShareData(BaseModel):
     share_url: str = Field(default="", description="分享链接")
     share_text: str = Field(default="", description="分享文案")
     share_image: str = Field(default="", description="分享图片")
+
+
+# ========================= 推荐提示词 =========================
+
+
+class SuggestedPrompt(BaseModel):
+    """推荐提示词"""
+
+    id: str = Field(default="", description="提示词ID")
+    text: str = Field(default="", description="提示词文本")
+    prompt_type: int = Field(
+        default=0, description="提示词类型: 0-通用, 1-追问, 2-深入, 3-切换话题"
+    )
+    icon: str = Field(default="", description="图标标识")
+
+
+class SuggestedPromptsRequest(BaseModel):
+    """获取推荐提示词请求"""
+
+    scene_type: int = Field(
+        default=0, description="场景类型: 0-通用, 1-装备推荐, 2-AI分析, 3-高光时刻, 4-推荐媒体"
+    )
+    content_id: str = Field(default="", description="内容ID")
+    tag_id: int = Field(default=0, description="标签ID")
+    count: int = Field(default=3, ge=1, le=5, description="期望数量")
+
+
+class SuggestedPromptsData(BaseModel):
+    """推荐提示词响应数据"""
+
+    prompts: List[SuggestedPrompt] = Field(default_factory=list, description="提示词列表")
+    scene_type: int = Field(default=0, description="场景类型")
+    content_id: str = Field(default="", description="关联内容ID")

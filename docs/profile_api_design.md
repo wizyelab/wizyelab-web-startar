@@ -462,9 +462,24 @@ eg: tag_content = ["padel", "tennis"]
 | post_type | int | 必填 | 帖子类型 | - | 1:video, 2:image, 3:text |
 | title | string | 选填 | 标题 | "" | 最大200字符 |
 | description | string | 选填 | 描述/正文 | "" | 最大2000字符 |
-| content | string | 内容 | "" | |
+| content | string | 选填 | 内容 | "" | |
 | img_urls | list[string] | 选填 | 图片URL列表 | [] | 图片URL |
+| video | Video | 选填 | 视频信息 | null | post_type=1时使用 |
 | tags | list[int] | 选填 | 标签ID列表 | [] | 帖子标签 |
+
+---
+
+### Video
+
+| 字段 | 类型 | 含义 | 默认值 | 备注 |
+|------|------|------|--------|------|
+| id | string | 视频ID | "" | |
+| height | int | 视频高度 | 0 | |
+| width | int | 视频宽度 | 0 | |
+| duration | int | 视频时长 | 0 | 单位：秒 |
+| cover_url | string | 封面图 | "" | |
+| main_url | string | 主链接 | "" | 视频播放地址 |
+| back_urls | list[string] | 备用链接 | [] | 备用CDN地址 |
 
 **请求示例**:
 ```json
@@ -473,9 +488,16 @@ eg: tag_content = ["padel", "tennis"]
     "title": "",
     "description": "Great match today! Had so much fun playing paddle.",
     "content": "",
-    "img_urls": [
-        "https://example.com/videos/upload_001.mp4"
-    ],
+    "img_urls": [],
+    "video": {
+        "id": "video_001",
+        "height": 1920,
+        "width": 1080,
+        "duration": 30,
+        "cover_url": "https://example.com/covers/video_001.png",
+        "main_url": "https://example.com/videos/upload_001.mp4",
+        "back_urls": []
+    },
     "tags": [1, 2]
 }
 ```

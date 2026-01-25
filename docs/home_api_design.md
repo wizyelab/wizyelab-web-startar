@@ -548,7 +548,113 @@
 
 ---
 
-## 六、错误码定义
+## 六、获取推荐提示词
+
+**URI**: `POST /joiiee/api/v1/internal/home/suggested_prompts`
+
+**功能描述**: 获取基于上下文的推荐提示词，用于非对话场景（如首页卡片、详情页等）引导用户开启对话
+
+---
+
+### 请求参数
+
+| 字段 | 类型 | 是否必填 | 含义 | 默认值 | 备注 |
+|------|------|----------|------|--------|------|
+| scene_type | int | 必填 | 场景类型 | 0 | 0:通用, 1:装备推荐, 2:AI分析, 3:高光时刻, 4:推荐媒体 |
+| content_id | string | 选填 | 内容ID | "" | 关联的内容卡片ID |
+| tag_id | int | 选填 | 标签ID | 0 | 如 Padel/Tennis 的标签 |
+| count | int | 选填 | 期望数量 | 3 | 最大5 |
+
+**请求示例**:
+```json
+{
+    "scene_type": 1,
+    "content_id": "content_001",
+    "tag_id": 1,
+    "count": 3
+}
+```
+
+---
+
+### 返回
+
+| 字段 | 类型 | 含义 | 默认值 | 备注 |
+|------|------|------|--------|------|
+| code | int | 状态码 | 0 | |
+| message | string | 返回信息 | "正确" | |
+| data | SuggestedPromptsData | 数据 | None | |
+
+---
+
+### SuggestedPromptsData
+
+| 字段 | 类型 | 含义 | 默认值 | 备注 |
+|------|------|------|--------|------|
+| prompts | list[SuggestedPrompt] | 提示词列表 | [] | 2-5个 |
+| scene_type | int | 场景类型 | 0 | |
+| content_id | string | 关联内容ID | "" | |
+
+---
+
+### SuggestedPrompt
+
+| 字段 | 类型 | 含义 | 默认值 | 备注 |
+|------|------|------|--------|------|
+| id | string | 提示词ID | "" | |
+| text | string | 提示词文本 | "" | 如"推荐一款适合新手的球拍" |
+| prompt_type | int | 提示词类型 | 0 | 0:通用, 1:追问, 2:深入, 3:切换话题 |
+| icon | string | 图标标识 | "" | 可选 |
+
+---
+
+### 返回示例
+
+```json
+{
+    "code": 0,
+    "message": "正确",
+    "data": {
+        "prompts": [
+            {
+                "id": "sp_001",
+                "text": "推荐一款适合新手的球拍",
+                "prompt_type": 0,
+                "icon": "racket"
+            },
+            {
+                "id": "sp_002",
+                "text": "这几款球拍有什么区别",
+                "prompt_type": 2,
+                "icon": "compare"
+            },
+            {
+                "id": "sp_003",
+                "text": "预算500以内有什么推荐",
+                "prompt_type": 1,
+                "icon": "price"
+            }
+        ],
+        "scene_type": 1,
+        "content_id": "content_001"
+    }
+}
+```
+
+---
+
+### prompt_type 类型说明
+
+| 类型值 | 类型名称 | 说明 | 示例 |
+|--------|----------|------|------|
+| 0 | general | 通用提示 | "帮我推荐一下" |
+| 1 | follow_up | 追问/补充 | "有更便宜的吗" |
+| 2 | deep_dive | 深入了解 | "详细对比一下" |
+| 3 | switch_topic | 切换话题 | "推荐一下球鞋" |
+
+---
+
+## 七、错误码定义
 
 | 错误码 | 含义 |
 |--------|------|
@@ -567,7 +673,7 @@
 
 ---
 
-## 七、content_type 类型说明
+## 八、content_type 类型说明
 
 | 类型值 | 类型名称 | 说明 | UI展示 |
 |--------|----------|------|--------|

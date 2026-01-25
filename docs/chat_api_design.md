@@ -375,7 +375,7 @@
 | role              | int | 角色  | 0 | 1:user, 2:assistant, 3:system |
 | content           | string | 消息内容或卡片文本消息 | "" | |
 | message_type      | int | 消息类型 | 1 |1:video, 2:image, 3:text, 4:voice |
-| message_style     | int| 消息样式 | 0 ｜ 0: chat对话, 1: 装备推荐, 2: AI分析, 3: 高光时刻, 4: 推荐媒体 | 
+| message_style     | int| 消息样式 | 0 ｜ 0: chat对话, 1: 装备推荐, 2: AI分析, 3: 高光时刻, 4: 推荐媒体 |
 | attachments       | list[Attachment] | 附件列表 | [] | |
 | cards             | list[Card] | 卡片列表 | [] | AI回复中的卡片组件 |
 | generation_status | int | 生成状态 | 3 | 1:pending, 2:generating, 3:completed, 4:failed, 5:stopped |
@@ -384,6 +384,48 @@
 | media_reference   | list[MediaReference] | 参考媒体源 | [] | |
 | summary           | string      | 总结  | ""                     |                            |
 | component         | Component | 组件  |  null | 有才展示|
+| thinking          | Thinking | 思考过程 | null | 仅AI消息有值，展示AI推理过程 |
+| suggested_prompts | list[SuggestedPrompt] | 推荐提示词 | [] | 仅AI消息有值，用于引导用户跟进提问 |
+
+___
+
+### SuggestedPrompt
+
+| 字段 | 类型 | 含义 | 默认值 | 备注 |
+|------|------|------|--------|------|
+| id | string | 提示词ID | "" | |
+| text | string | 提示词文本 | "" | 如"对比其他品牌"，不超过15字符 |
+| prompt_type | int | 提示词类型 | 0 | 0:通用, 1:追问, 2:深入, 3:切换话题 |
+| icon | string | 图标标识 | "" | 可选，如"compare"、"price" |
+
+___
+
+### Thinking
+
+| 字段 | 类型 | 含义 | 默认值 | 备注 |
+|------|------|------|--------|------|
+| thinking_id | string | 思考过程ID | "" | |
+| message_id | string | 关联的消息ID | "" | |
+| summary | string | 思考摘要 | "" | 如"已完成需求分析和产品匹配" |
+| steps | list[ThinkingStep] | 思考步骤列表 | [] | |
+| total_duration_ms | int | 总耗时 | 0 | 毫秒 |
+| is_expanded | boolean | 是否默认展开 | false | |
+
+___
+
+### ThinkingStep
+
+| 字段 | 类型 | 含义 | 默认值 | 备注 |
+|------|------|------|--------|------|
+| step_id | string | 步骤ID | "" | |
+| step_order | int | 步骤顺序 | 0 | 从1开始 |
+| title | string | 步骤标题 | "" | 如"分析用户需求" |
+| content | string | 步骤详细内容 | "" | |
+| step_type | int | 步骤类型 | 0 | 0:分析, 1:检索, 2:推理, 3:生成, 4:验证 |
+| duration_ms | int | 步骤耗时 | 0 | 毫秒 |
+| status | int | 步骤状态 | 3 | 1:pending, 2:processing, 3:completed |
+| video | Video | 相关视频 | null | 视频分析场景使用 |
+| img_urls | list[string] | 相关图片列表 | [] | 动作截图、骨架图等 |
 
 ___
 
@@ -507,7 +549,9 @@ ___
             "display_time": "2026-01-21T10:30:00Z",
             "media_reference": [],
             "summary": "",
-            "component": null
+            "component": null,
+            "thinking": null,
+            "suggested_prompts": []
         },
         "ai_message": {
             "message_id": "msg_002",
@@ -523,7 +567,22 @@ ___
             "display_time": "2026-01-21T10:30:01Z",
             "media_reference": [],
             "summary": "",
-            "component": null
+            "component": null,
+            "thinking": null,
+            "suggested_prompts": [
+                {
+                    "id": "sp_001",
+                    "text": "Tell me more",
+                    "prompt_type": 2,
+                    "icon": ""
+                },
+                {
+                    "id": "sp_002",
+                    "text": "What else can you do?",
+                    "prompt_type": 1,
+                    "icon": ""
+                }
+            ]
         },
         "session_updated": false
     }
@@ -550,7 +609,9 @@ ___
             "display_time": "2026-01-21T11:00:00Z",
             "media_reference": [],
             "summary": "",
-            "component": null
+            "component": null,
+            "thinking": null,
+            "suggested_prompts": []
         },
         "ai_message": {
             "message_id": "msg_004",
@@ -598,7 +659,75 @@ ___
                 "text": "Would you like more recommendations?",
                 "button_left_desc": "Yes",
                 "button_right_desc": "No"
-            }
+            },
+            "thinking": {
+                "thinking_id": "think_001",
+                "message_id": "msg_004",
+                "summary": "Analyzed your needs and matched products",
+                "steps": [
+                    {
+                        "step_id": "step_001",
+                        "step_order": 1,
+                        "title": "Analyzing requirements",
+                        "content": "Identified your skill level and preference for control",
+                        "step_type": 0,
+                        "duration_ms": 120,
+                        "status": 3,
+                        "video": null,
+                        "img_urls": []
+                    },
+                    {
+                        "step_id": "step_002",
+                        "step_order": 2,
+                        "title": "Searching products",
+                        "content": "Filtered 12 rackets from 856 products for intermediate players",
+                        "step_type": 1,
+                        "duration_ms": 350,
+                        "status": 3,
+                        "video": null,
+                        "img_urls": []
+                    },
+                    {
+                        "step_id": "step_003",
+                        "step_order": 3,
+                        "title": "Generating recommendations",
+                        "content": "Selected top 3 based on reviews and value",
+                        "step_type": 2,
+                        "duration_ms": 180,
+                        "status": 3,
+                        "video": null,
+                        "img_urls": []
+                    }
+                ],
+                "total_duration_ms": 650,
+                "is_expanded": false
+            },
+            "suggested_prompts": [
+                {
+                    "id": "sp_001",
+                    "text": "Compare with others",
+                    "prompt_type": 2,
+                    "icon": "compare"
+                },
+                {
+                    "id": "sp_002",
+                    "text": "Show user reviews",
+                    "prompt_type": 2,
+                    "icon": "review"
+                },
+                {
+                    "id": "sp_003",
+                    "text": "Any cheaper options?",
+                    "prompt_type": 1,
+                    "icon": "price"
+                },
+                {
+                    "id": "sp_004",
+                    "text": "Recommend shoes too",
+                    "prompt_type": 3,
+                    "icon": "shoe"
+                }
+            ]
         },
         "session_updated": true
     }
@@ -675,7 +804,9 @@ ___
                 "display_time": "2026-01-21T10:30:00Z",
                 "media_reference": [],
                 "summary": "",
-                "component": null
+                "component": null,
+                "thinking": null,
+                "suggested_prompts": []
             },
             {
                 "message_id": "msg_002",
@@ -691,7 +822,22 @@ ___
                 "display_time": "2026-01-21T10:30:01Z",
                 "media_reference": [],
                 "summary": "",
-                "component": null
+                "component": null,
+                "thinking": null,
+                "suggested_prompts": [
+                    {
+                        "id": "sp_001",
+                        "text": "Tell me more",
+                        "prompt_type": 2,
+                        "icon": ""
+                    },
+                    {
+                        "id": "sp_002",
+                        "text": "What else?",
+                        "prompt_type": 1,
+                        "icon": ""
+                    }
+                ]
             }
         ],
         "has_more": false
@@ -883,6 +1029,39 @@ ___
 
 ---
 
-**文档版本**: v1.1
-**更新日期**: 2026-01-22
+## 十九、prompt_type 提示词类型说明
+
+| 类型值 | 类型名称 | 说明 | 示例 |
+|--------|----------|------|------|
+| 0 | general | 通用提示 | "帮我总结一下" |
+| 1 | follow_up | 追问/补充 | "有更便宜的吗" |
+| 2 | deep_dive | 深入了解 | "详细对比一下" |
+| 3 | switch_topic | 切换话题 | "推荐一下球鞋" |
+
+---
+
+## 二十、step_type 思考步骤类型说明
+
+| 类型值 | 类型名称 | 说明 | 示例 |
+|--------|----------|------|------|
+| 0 | analyze | 分析理解 | "理解您想要一款控制型球拍" |
+| 1 | retrieve | 信息检索 | "从装备库中筛选符合条件的产品" |
+| 2 | reason | 推理判断 | "根据您的水平推荐中高端产品" |
+| 3 | generate | 内容生成 | "整合信息生成推荐列表" |
+| 4 | verify | 验证确认 | "确认推荐结果的准确性" |
+
+---
+
+## 二十一、thinking_step_status 思考步骤状态说明
+
+| 类型值 | 类型名称 | 说明 |
+|--------|----------|------|
+| 1 | pending | 等待中 |
+| 2 | processing | 处理中 |
+| 3 | completed | 已完成 |
+
+---
+
+**文档版本**: v1.3
+**更新日期**: 2026-01-24
 **编写人**: Joiiee Tech Team

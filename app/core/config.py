@@ -176,6 +176,69 @@ class CORSConfig(BaseSettings):
     allow_credentials: bool = True
     allow_methods: List[str] = Field(default_factory=lambda: ["*"])
     allow_headers: List[str] = Field(default_factory=lambda: ["*"])
+    expose_headers: List[str] = Field(default_factory=lambda: ["X-Session-ID", "X-Request-ID", "X-Trace-ID", "X-Process-Time"])
+
+
+class SessionConfig(BaseSettings):
+    """Session 配置"""
+    ttl_days: int = 7  # Session 有效期（天）
+    cookie_name: str = "session_id"  # Cookie 名称
+    cookie_secure: bool = True  # 仅 HTTPS
+    cookie_httponly: bool = True  # 禁止 JS 访问
+    cookie_samesite: str = "lax"  # SameSite 策略
+    header_name: str = "X-Session-ID"  # Header 名称
+
+
+class AuthConfig(BaseSettings):
+    """认证配置"""
+    # 不需要认证的路径前缀
+    public_path_prefixes: List[str] = Field(default_factory=lambda: [
+        "/health",
+        "/docs",
+        "/redoc",
+        "/openapi.json",
+        "/metrics",
+        "/api/v1/public",
+    ])
+
+    # 不需要认证的精确路径
+    public_exact_paths: List[str] = Field(default_factory=lambda: [
+        "/api/v1/internal/account/login",
+        "/api/v1/internal/account/send_verify_code",
+    ])
+
+    # 未认证响应
+    unauthorized_code: int = 401
+    unauthorized_message: str = "请先登录"
+
+
+class FirebaseConfig(BaseSettings):
+    """Firebase 配置"""
+    project_id: str = ""
+    credentials_path: str = "firebase-credentials.json"
+
+
+class SMTPConfig(BaseSettings):
+    """SMTP 邮件配置"""
+    host: str = "smtp.gmail.com"
+    port: int = 587
+    user: str = ""
+    password: str = ""
+    from_email: str = ""
+    from_name: str = "Wizyelab"
+    use_tls: bool = True
+
+
+class VerifyCodeConfig(BaseSettings):
+    """验证码配置"""
+    expire_minutes: int = 10
+    length: int = 6
+
+
+class SnowflakeConfig(BaseSettings):
+    """雪花算法配置"""
+    worker_id: int = 1  # 机器ID (0-31)
+    datacenter_id: int = 1  # 数据中心ID (0-31)
 
 
 class OSSUploadConfig(BaseSettings):
@@ -204,6 +267,7 @@ class OSSConfig(BaseSettings):
     upload: OSSUploadConfig = Field(default_factory=OSSUploadConfig)
     download: OSSDownloadConfig = Field(default_factory=OSSDownloadConfig)
     url_expire_seconds: int = 3600  # 签名 URL 过期时间
+    file_host: str = ""  # 外网访问域名
 
 
 class Settings(BaseSettings):
@@ -245,8 +309,35 @@ class Settings(BaseSettings):
     # CORS 配置
     cors: CORSConfig = Field(default_factory=CORSConfig)
 
+    # Session 配置
+    session: SessionConfig = Field(default_factory=SessionConfig)
+
+    # 认证配置
+    auth: AuthConfig = Field(default_factory=AuthConfig)
+
     # OSS 配置
     oss: OSSConfig = Field(default_factory=OSSConfig)
+
+    # Firebase 配置
+    firebase: FirebaseConfig = Field(default_factory=FirebaseConfig)
+
+    # SMTP 配置
+    smtp: SMTPConfig = Field(default_factory=SMTPConfig)
+
+    # 验证码配置
+    verify_code: VerifyCodeConfig = Field(default_factory=VerifyCodeConfig)
+
+    # 雪花算法配置
+    snowflake: SnowflakeConfig = Field(default_factory=SnowflakeConfig)
+
+    # 兼容旧的属性访问方式（雪花算法）
+    @property
+    def snowflake_worker_id(self) -> int:
+        return self.snowflake.worker_id
+
+    @property
+    def snowflake_datacenter_id(self) -> int:
+        return self.snowflake.datacenter_id
 
     # 兼容旧的属性访问方式
     @property
@@ -506,6 +597,14 @@ class Settings(BaseSettings):
         if "cors" in yaml_config:
             config_dict["cors"] = CORSConfig(**yaml_config["cors"])
 
+        # Session 配置
+        if "session" in yaml_config:
+            config_dict["session"] = SessionConfig(**yaml_config["session"])
+
+        # 认证配置
+        if "auth" in yaml_config:
+            config_dict["auth"] = AuthConfig(**yaml_config["auth"])
+
         # OSS 配置
         if "oss" in yaml_config:
             oss_data = yaml_config["oss"]
@@ -519,9 +618,26 @@ class Settings(BaseSettings):
                 connect_timeout=oss_data.get("connect_timeout", 30),
                 upload=OSSUploadConfig(**oss_data.get("upload", {})),
                 download=OSSDownloadConfig(**oss_data.get("download", {})),
-                url_expire_seconds=oss_data.get("url_expire_seconds", 3600)
+                url_expire_seconds=oss_data.get("url_expire_seconds", 3600),
+                file_host=oss_data.get("file_host", "")
             )
             config_dict["oss"] = oss_config
+
+        # Firebase 配置
+        if "firebase" in yaml_config:
+            config_dict["firebase"] = FirebaseConfig(**yaml_config["firebase"])
+
+        # SMTP 配置
+        if "smtp" in yaml_config:
+            config_dict["smtp"] = SMTPConfig(**yaml_config["smtp"])
+
+        # 验证码配置
+        if "verify_code" in yaml_config:
+            config_dict["verify_code"] = VerifyCodeConfig(**yaml_config["verify_code"])
+
+        # 雪花算法配置
+        if "snowflake" in yaml_config:
+            config_dict["snowflake"] = SnowflakeConfig(**yaml_config["snowflake"])
 
         return config_dict
 

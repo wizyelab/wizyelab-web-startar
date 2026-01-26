@@ -2,25 +2,33 @@
 请求上下文中间件
 
 功能：
-1. 解析请求 Header 中的关键参数（x-request-id, x-trace-id, x-user-id 等）
+1. 解析请求 Header 中的关键参数（x-request-id, x-trace-id 等）
 2. 生成 trace_id 用于链路追踪
 3. 提供全局请求上下文，其他代码可随时访问
 4. 在响应 Header 中添加追踪信息
+5. 解析 session_id（从 Header 或 Cookie）获取 user_id
+6. 登录成功后在响应中设置 session_id（Header 和 Cookie）
+7. 统一认证校验，未认证请求返回 401
 """
 
 import time
-import uuid
 from contextvars import ContextVar
 from dataclasses import dataclass, field
 from typing import Callable, Optional, Dict, Any
 
 from fastapi import Request, Response
+from fastapi.responses import JSONResponse
 from starlette.middleware.base import BaseHTTPMiddleware
 
 from app.core.logging import setup_logger
 from app.core.snowflake import generate_id_str
+from app.core.config import settings
 
 logger = setup_logger(__name__)
+
+# Session Header/Cookie 名称（小写用于 Header 匹配）
+SESSION_HEADER_KEY = settings.session.header_name.lower()
+SESSION_COOKIE_KEY = settings.session.cookie_name
 
 
 @dataclass
@@ -38,6 +46,7 @@ class RequestContext:
     # 用户信息
     user_id: str = ""             # 用户ID
     device_id: str = ""           # 设备ID
+    session_id: str = ""          # Session ID
 
     # 客户端信息
     client_ip: str = ""           # 客户端IP
@@ -50,6 +59,9 @@ class RequestContext:
     path: str = ""                # 请求路径
     start_time: float = 0.0       # 请求开始时间
 
+    # Session 响应标志
+    _new_session_id: str = ""     # 登录成功后需要设置到响应的 session_id
+
     # 扩展数据
     extra: Dict[str, Any] = field(default_factory=dict)
 
@@ -61,6 +73,7 @@ class RequestContext:
             "span_id": self.span_id,
             "user_id": self.user_id,
             "device_id": self.device_id,
+            "session_id": self.session_id,
             "client_ip": self.client_ip,
             "user_agent": self.user_agent,
             "platform": self.platform,
@@ -121,6 +134,30 @@ def get_request_id() -> str:
     return ctx.request_id if ctx else ""
 
 
+def get_session_id() -> str:
+    """获取当前 session ID"""
+    ctx = get_request_context()
+    return ctx.session_id if ctx else ""
+
+
+def set_session_id_for_response(session_id: str) -> None:
+    """
+    设置 session_id，将在响应时添加到 Header 和 Cookie
+
+    在登录成功后调用此函数，中间件会自动将 session_id 添加到响应中
+
+    Usage:
+        from app.middleware.request_context import set_session_id_for_response
+
+        # 登录成功后
+        set_session_id_for_response(session_id)
+    """
+    ctx = get_request_context()
+    if ctx:
+        ctx.session_id = session_id
+        ctx._new_session_id = session_id
+
+
 class RequestContextMiddleware(BaseHTTPMiddleware):
     """
     请求上下文中间件
@@ -130,15 +167,22 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
     支持的请求 Header：
     - X-Request-ID: 客户端请求ID
     - X-Trace-ID: 链路追踪ID（可选，不传则自动生成）
-    - X-User-ID: 用户ID
+    - X-Session-ID: 会话ID（用于身份认证）
     - X-Device-ID: 设备ID
     - X-Platform: 平台标识 (ios/android/web)
     - X-App-Version: App版本号
+
+    也支持从 Cookie 读取 session_id
 
     响应 Header：
     - X-Request-ID: 请求ID
     - X-Trace-ID: 链路追踪ID
     - X-Process-Time: 处理时间（毫秒）
+    - X-Session-ID: 会话ID（登录成功时设置）
+
+    认证校验：
+    - 根据配置的公开路径规则判断是否需要认证
+    - 未认证请求直接返回 401 响应
     """
 
     # 需要解析的 Header 映射
@@ -146,7 +190,6 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
         "x-request-id": "request_id",
         "x-trace-id": "trace_id",
         "x-span-id": "span_id",
-        "x-user-id": "user_id",
         "x-device-id": "device_id",
         "x-platform": "platform",
         "x-app-version": "app_version",
@@ -156,10 +199,17 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
         # 构建请求上下文
         ctx = self._build_context(request)
 
+        # 解析 session 获取 user_id（异步操作）
+        await self._resolve_session(request, ctx)
+
         # 设置上下文变量
         token = _request_context.set(ctx)
 
         try:
+            # 【认证校验】检查是否需要认证且未认证
+            if self._requires_auth(request.url.path) and not ctx.user_id:
+                return self._unauthorized_response(ctx)
+
             # 处理请求
             response = await call_next(request)
 
@@ -170,6 +220,10 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
             response.headers["X-Request-ID"] = ctx.request_id
             response.headers["X-Trace-ID"] = ctx.trace_id
             response.headers["X-Process-Time"] = str(process_time_ms)
+
+            # 如果有新的 session_id（登录成功），添加到响应
+            if ctx._new_session_id:
+                self._set_session_response(response, ctx._new_session_id)
 
             return response
 
@@ -214,6 +268,82 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
         ctx.user_agent = request.headers.get("user-agent", "")
 
         return ctx
+
+    async def _resolve_session(self, request: Request, ctx: RequestContext) -> None:
+        """
+        解析 session，从 Header 或 Cookie 获取 session_id，并查询 user_id
+
+        优先级：Header > Cookie
+        """
+        # 1. 优先从 Header 获取 session_id
+        session_id = request.headers.get(SESSION_HEADER_KEY, "")
+
+        # 2. 如果 Header 没有，从 Cookie 获取
+        if not session_id:
+            session_id = request.cookies.get(SESSION_COOKIE_KEY, "")
+
+        if not session_id:
+            return
+
+        ctx.session_id = session_id
+
+        # 3. 从 Redis 获取 user_id
+        try:
+            from app.services.auth_service import auth_service
+            user_id = await auth_service.get_user_id_by_session(session_id)
+            if user_id:
+                ctx.user_id = user_id
+                logger.debug(f"Session 解析成功: session_id={session_id}, user_id={user_id}")
+        except Exception as e:
+            logger.warning(f"Session 解析失败: session_id={session_id}, error={e}")
+
+    def _requires_auth(self, path: str) -> bool:
+        """判断路径是否需要认证"""
+        # 精确匹配白名单
+        if path in settings.auth.public_exact_paths:
+            return False
+
+        # 前缀匹配白名单
+        for prefix in settings.auth.public_path_prefixes:
+            if path.startswith(prefix):
+                return False
+
+        return True
+
+    def _unauthorized_response(self, ctx: RequestContext) -> JSONResponse:
+        """返回未认证响应"""
+        process_time_ms = round((time.time() - ctx.start_time) * 1000, 2)
+
+        return JSONResponse(
+            status_code=settings.auth.unauthorized_code,
+            content={
+                "code": settings.auth.unauthorized_code,
+                "message": settings.auth.unauthorized_message,
+                "data": None
+            },
+            headers={
+                "X-Request-ID": ctx.request_id,
+                "X-Trace-ID": ctx.trace_id,
+                "X-Process-Time": str(process_time_ms),
+                "WWW-Authenticate": "Session",
+            }
+        )
+
+    def _set_session_response(self, response: Response, session_id: str) -> None:
+        """在响应中设置 session_id（Header 和 Cookie）"""
+        # 设置 Header（移动端使用）
+        response.headers[settings.session.header_name] = session_id
+
+        # 设置 Cookie（Web 端使用）
+        max_age = settings.session.ttl_days * 24 * 3600
+        response.set_cookie(
+            key=SESSION_COOKIE_KEY,
+            value=session_id,
+            max_age=max_age,
+            httponly=settings.session.cookie_httponly,
+            secure=settings.session.cookie_secure,
+            samesite=settings.session.cookie_samesite,
+        )
 
     def _get_client_ip(self, request: Request) -> str:
         """获取客户端真实 IP"""

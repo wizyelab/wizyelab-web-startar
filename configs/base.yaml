@@ -130,6 +130,41 @@ cors:
     - "*"
   allow_headers:
     - "*"
+  expose_headers:
+    - "X-Session-ID"
+    - "X-Request-ID"
+    - "X-Trace-ID"
+    - "X-Process-Time"
+
+# =============================================================================
+# Session 配置
+# =============================================================================
+session:
+  ttl_days: 7  # Session 有效期（天）
+  cookie_name: "session_id"
+  cookie_secure: true
+  cookie_httponly: true
+  cookie_samesite: "lax"
+  header_name: "X-Session-ID"
+
+# =============================================================================
+# 认证配置
+# =============================================================================
+auth:
+  # 不需要认证的路径前缀
+  public_path_prefixes:
+    - "/health"
+    - "/docs"
+    - "/redoc"
+    - "/openapi.json"
+    - "/metrics"
+    - "/api/v1/public"
+  # 不需要认证的精确路径
+  public_exact_paths:
+    - "/api/v1/internal/account/login"
+    - "/api/v1/internal/account/send_verify_code"
+  unauthorized_code: 401
+  unauthorized_message: "请先登录"
 
 # =============================================================================
 # 阿里云 OSS 配置
@@ -163,3 +198,38 @@ oss:
     num_threads: 4
   # URL 签名过期时间（秒）
   url_expire_seconds: 3600
+  # 外网访问域名
+  file_host: ""
+
+# =============================================================================
+# Firebase 配置
+# =============================================================================
+firebase:
+  project_id: ""
+  credentials_path: "firebase-credentials.json"
+
+# =============================================================================
+# SMTP 邮件配置
+# =============================================================================
+smtp:
+  host: "smtp.gmail.com"
+  port: 587
+  user: ""
+  password: ""
+  from_email: ""
+  from_name: "Wizyelab"
+  use_tls: true
+
+# =============================================================================
+# 验证码配置
+# =============================================================================
+verify_code:
+  expire_minutes: 10
+  length: 6
+
+# =============================================================================
+# 雪花算法配置
+# =============================================================================
+snowflake:
+  worker_id: 1
+  datacenter_id: 1

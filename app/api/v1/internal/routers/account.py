@@ -1,221 +1,112 @@
 """账户相关路由"""
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends
+from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.logging import setup_logger
-from app.core.deps import get_current_user_id, get_current_session_id
 from app.schemas.common import BaseResponse
 from app.schemas.account import (
     LoginRequest,
-    LoginResponse,
+    LoginData,
     SendVerifyCodeRequest,
-    SendVerifyCodeResponse,
     LogoutRequest,
-    LogoutResponse,
-    UserInfo,
+    ErrorCode,
 )
-from app.services.auth_service import auth_service
-from app.middleware.request_context import (
-    set_session_id_for_response,
-    get_request_context,
-)
+from app.services.account_service import AccountService
+from app.infrastructure.database.connection import get_async_db
+from app.core.logging import setup_logger
 
 logger = setup_logger(__name__)
 
 router = APIRouter(prefix="/account", tags=["account"])
 
 
-@router.post("/login", response_model=BaseResponse[LoginResponse])
-async def login(request: LoginRequest):
+# ========================= 路由 =========================
+
+
+@router.post("/login", response_model=BaseResponse[LoginData])
+async def login(request: LoginRequest, db: AsyncSession = Depends(get_async_db)):
     """
     用户登录
 
-    支持的登录方式:
-    - email: 邮箱验证码登录
-    - google: Google 第三方登录
-    - apple: Apple 第三方登录
+    支持两种登录方式：
+    1. 第三方登录（Google/Apple）- 提供 id_token
+    2. 邮箱验证码登录 - 提供 email + verify_code
+
+    **注意**: 必须提供 id_token 或 (email + verify_code) 其中一种方式
     """
-    try:
-        # TODO: 根据 login_type 实现具体的登录逻辑
-        # 1. email 登录：验证邮箱和验证码
-        # 2. google/apple 登录：验证 Firebase ID Token
+    device_id = request.device_info.device_id if request.device_info else ""
 
-        # 这里是示例实现，实际需要根据业务逻辑完善
-        if request.login_type == "email":
-            if not request.email or not request.verify_code:
-                return BaseResponse(
-                    code=400,
-                    message="邮箱和验证码不能为空",
-                    data=None
-                )
-            # TODO: 验证邮箱验证码
-            # TODO: 查找或创建用户
+    account_service = AccountService(db)
 
-        elif request.login_type in ["google", "apple"]:
-            if not request.id_token:
-                return BaseResponse(
-                    code=400,
-                    message="ID Token 不能为空",
-                    data=None
-                )
-            # TODO: 验证 Firebase ID Token
-            # TODO: 查找或创建用户
-
-        else:
-            return BaseResponse(
-                code=400,
-                message=f"不支持的登录类型: {request.login_type}",
-                data=None
-            )
-
-        # 示例：假设用户已验证通过
-        # 实际应该从数据库获取或创建用户
-        from app.core.snowflake import generate_id_str
-        user_id = generate_id_str()  # 实际应该是从数据库获取的 user_id
-        is_new_user = True  # 实际应该根据查询结果判断
-
-        # 创建 session
-        session_id = auth_service.generate_session_id()
-        device_id = request.device_id or "unknown"
-
-        success = await auth_service.create_session(
-            session_id=session_id,
-            user_id=user_id,
+    if request.id_token:
+        # 第三方登录
+        code, message, data = await account_service.verify_third_party_login(
+            id_token=request.id_token,
             device_id=device_id,
-            extra_data={
-                "login_type": request.login_type,
-                "device_type": request.device_type,
-            }
         )
-
-        if not success:
-            return BaseResponse(
-                code=500,
-                message="创建会话失败",
-                data=None
-            )
-
-        # 设置响应中的 session_id
-        set_session_id_for_response(session_id)
-
-        logger.info(f"用户登录成功: user_id={user_id}, login_type={request.login_type}")
-
+    elif request.email and request.verify_code:
+        # 邮箱验证码登录
+        code, message, data = await account_service.verify_email_login(
+            email=request.email,
+            verify_code=request.verify_code,
+            device_id=device_id,
+        )
+    else:
         return BaseResponse(
-            code=0,
-            message="登录成功",
-            data=LoginResponse(
-                user_id=user_id,
-                session_id=session_id,
-                is_new_user=is_new_user
-            )
+            code=ErrorCode.INVALID_PARAMS,
+            message="请提供 id_token（第三方登录）或 email + verify_code（邮箱登录）",
+            data=None,
         )
 
-    except Exception as e:
-        logger.error(f"登录失败: {e}")
-        return BaseResponse(
-            code=500,
-            message="登录失败，请稍后重试",
-            data=None
-        )
+    return BaseResponse(code=code, message=message, data=data)
 
 
-@router.post("/send_verify_code", response_model=BaseResponse[SendVerifyCodeResponse])
-async def send_verify_code(request: SendVerifyCodeRequest):
-    """
-    发送邮箱验证码
-
-    用于邮箱登录前发送验证码
-    """
-    try:
-        # TODO: 实现发送验证码逻辑
-        # 1. 生成验证码
-        # 2. 存储到 Redis（设置过期时间）
-        # 3. 发送邮件
-
-        logger.info(f"发送验证码: email={request.email}")
-
-        return BaseResponse(
-            code=0,
-            message="验证码已发送",
-            data=SendVerifyCodeResponse(
-                success=True,
-                message="验证码已发送到您的邮箱"
-            )
-        )
-
-    except Exception as e:
-        logger.error(f"发送验证码失败: {e}")
-        return BaseResponse(
-            code=500,
-            message="发送验证码失败",
-            data=None
-        )
-
-
-@router.post("/logout", response_model=BaseResponse[LogoutResponse])
-async def logout(
-    request: LogoutRequest,
-    session_id: str = Depends(get_current_session_id),
-    user_id: str = Depends(get_current_user_id)
+@router.post("/send_verify_code", response_model=BaseResponse)
+async def send_verify_code(
+    request: SendVerifyCodeRequest, db: AsyncSession = Depends(get_async_db)
 ):
+    """
+    发送验证码
+
+    发送6位数字验证码到指定邮箱，用于邮箱登录验证。
+
+    **业务说明**:
+    1. 验证码生成: 生成6位数字验证码
+    2. 存储: 验证码存储到Redis，有效期10分钟
+    3. 发送限制: 同一邮箱+设备10分钟内只能发送一次
+    4. 邮件发送: 通过SMTP发送验证码邮件
+    """
+    device_id = request.device_info.device_id if request.device_info else ""
+
+    account_service = AccountService(db)
+    code, message = await account_service.send_verify_code(
+        email=request.email,
+        device_id=device_id,
+    )
+
+    return BaseResponse(code=code, message=message, data=None)
+
+
+@router.post("/logout", response_model=BaseResponse)
+async def logout(request: LogoutRequest, db: AsyncSession = Depends(get_async_db)):
     """
     用户登出
 
-    可选择登出当前设备或所有设备
+    使当前会话Token失效。
+
+    **登出流程**:
+    1. 获取用户信息: 根据user_id获取用户的Firebase UID
+    2. 撤销Firebase Token: 调用Firebase Admin SDK撤销用户的Refresh Token
+    3. 删除Redis会话: 删除Redis中存储的会话缓存
+    4. 数据库会话失效: 将数据库中该设备的会话标记为无效
+    5. 更新设备状态: 将该设备标记为非活跃状态
     """
-    try:
-        if request.all_devices:
-            # 登出所有设备
-            await auth_service.delete_user_sessions(user_id)
-            logger.info(f"用户登出所有设备: user_id={user_id}")
-        else:
-            # 登出当前设备
-            await auth_service.delete_session(session_id)
-            logger.info(f"用户登出: user_id={user_id}, session_id={session_id}")
+    device_id = request.device_info.device_id if request.device_info else ""
 
-        return BaseResponse(
-            code=0,
-            message="登出成功",
-            data=LogoutResponse(success=True)
-        )
+    account_service = AccountService(db)
+    code, message = await account_service.logout(
+        user_id=request.user_id,
+        device_id=device_id,
+    )
 
-    except Exception as e:
-        logger.error(f"登出失败: {e}")
-        return BaseResponse(
-            code=500,
-            message="登出失败",
-            data=None
-        )
-
-
-@router.get("/me", response_model=BaseResponse[UserInfo])
-async def get_current_user(user_id: str = Depends(get_current_user_id)):
-    """
-    获取当前登录用户信息
-    """
-    try:
-        # TODO: 从数据库获取用户信息
-        # 这里是示例实现
-
-        return BaseResponse(
-            code=0,
-            message="获取成功",
-            data=UserInfo(
-                user_id=user_id,
-                email="",
-                username="",
-                avatar="",
-                bio="",
-                gender="",
-                location="",
-                login_provider=""
-            )
-        )
-
-    except Exception as e:
-        logger.error(f"获取用户信息失败: {e}")
-        return BaseResponse(
-            code=500,
-            message="获取用户信息失败",
-            data=None
-        )
+    return BaseResponse(code=code, message=message, data=None)

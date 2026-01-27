@@ -58,6 +58,14 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.warning(f"Failed to initialize OSS: {e}")
 
+    # 初始化 Firebase
+    try:
+        from app.services.firebase_service import init_firebase
+        init_firebase()
+        logger.info("Firebase initialized")
+    except Exception as e:
+        logger.warning(f"Failed to initialize Firebase: {e}")
+
     logger.info("Application started successfully")
 
     yield

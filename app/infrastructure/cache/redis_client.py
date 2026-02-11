@@ -5,6 +5,7 @@ Redis 客户端模块
 """
 
 import json
+import asyncio
 from typing import Any, Optional, Union
 from contextlib import asynccontextmanager
 
@@ -34,6 +35,8 @@ class RedisClient:
         self._pool: Optional[ConnectionPool] = None
         self._client: Optional[Redis] = None
         self._initialized = False
+        self._reconnect_lock = asyncio.Lock()
+        self._reconnecting = False
 
     async def init(self) -> None:
         """初始化 Redis 连接池"""
@@ -53,6 +56,10 @@ class RedisClient:
                 decode_responses=settings.redis.decode_responses,
                 socket_timeout=settings.redis.socket_timeout,
                 socket_connect_timeout=settings.redis.socket_connect_timeout,
+                # 添加健康检查间隔，自动检测并重建断开的连接
+                health_check_interval=30,
+                # 添加重试配置
+                retry_on_timeout=True,
             )
 
             self._client = Redis(connection_pool=self._pool)
@@ -81,12 +88,84 @@ class RedisClient:
             raise RuntimeError("Redis client not initialized. Call init() first.")
         return self._client
 
+    async def _reconnect(self) -> None:
+        """重新连接 Redis（带锁防止并发重连）"""
+        # 使用锁防止多个请求同时重连
+        async with self._reconnect_lock:
+            # 如果已经在重连中或已经重连成功，直接返回
+            if self._reconnecting:
+                return
+
+            # 再次检查连接是否已恢复（可能其他协程已经重连成功）
+            if self._initialized and self._client:
+                try:
+                    await asyncio.wait_for(self._client.ping(), timeout=2.0)
+                    return  # 连接正常，无需重连
+                except Exception:
+                    pass  # 连接仍然有问题，继续重连
+
+            self._reconnecting = True
+            try:
+                logger.info("Starting Redis reconnection...")
+                self._initialized = False
+
+                # 关闭旧连接
+                if self._client:
+                    try:
+                        await asyncio.wait_for(self._client.close(), timeout=5.0)
+                    except Exception as e:
+                        logger.warning(f"Error closing Redis client: {e}")
+
+                if self._pool:
+                    try:
+                        await asyncio.wait_for(self._pool.disconnect(), timeout=5.0)
+                    except Exception as e:
+                        logger.warning(f"Error disconnecting Redis pool: {e}")
+
+                self._client = None
+                self._pool = None
+
+                # 等待一小段时间确保连接完全关闭
+                await asyncio.sleep(0.1)
+
+                # 重新初始化
+                await self.init()
+                logger.info("Redis reconnected successfully")
+            except Exception as e:
+                logger.error(f"Failed to reconnect Redis: {e}")
+                raise
+            finally:
+                self._reconnecting = False
+
     # =========================================================================
     # 基本操作
     # =========================================================================
     async def get(self, key: str) -> Optional[str]:
-        """获取值"""
-        return await self.client.get(key)
+        """获取值（带自动重连）"""
+        max_retries = 2
+        last_error = None
+
+        for attempt in range(max_retries + 1):
+            try:
+                return await self.client.get(key)
+            except Exception as e:
+                last_error = e
+                error_str = str(e).lower()
+                # 连接断开时尝试重新初始化
+                if "closed" in error_str or "connection" in error_str or "handler" in error_str:
+                    if attempt < max_retries:
+                        logger.warning(f"Redis connection error (attempt {attempt + 1}/{max_retries + 1}), reconnecting: {e}")
+                        try:
+                            await self._reconnect()
+                            continue  # 重连成功，重试操作
+                        except Exception as reconnect_error:
+                            logger.error(f"Redis reconnect failed: {reconnect_error}")
+                    else:
+                        logger.error(f"Redis connection error after {max_retries + 1} attempts: {e}")
+                else:
+                    raise
+
+        raise last_error
 
     async def set(
         self,
@@ -98,7 +177,7 @@ class RedisClient:
         xx: bool = False,
     ) -> bool:
         """
-        设置值
+        设置值（带自动重连）
 
         Args:
             key: 键
@@ -108,7 +187,30 @@ class RedisClient:
             nx: 仅当键不存在时设置
             xx: 仅当键存在时设置
         """
-        return await self.client.set(key, value, ex=ex, px=px, nx=nx, xx=xx)
+        max_retries = 2
+        last_error = None
+
+        for attempt in range(max_retries + 1):
+            try:
+                return await self.client.set(key, value, ex=ex, px=px, nx=nx, xx=xx)
+            except Exception as e:
+                last_error = e
+                error_str = str(e).lower()
+                # 连接断开时尝试重新初始化
+                if "closed" in error_str or "connection" in error_str or "handler" in error_str:
+                    if attempt < max_retries:
+                        logger.warning(f"Redis connection error (attempt {attempt + 1}/{max_retries + 1}), reconnecting: {e}")
+                        try:
+                            await self._reconnect()
+                            continue  # 重连成功，重试操作
+                        except Exception as reconnect_error:
+                            logger.error(f"Redis reconnect failed: {reconnect_error}")
+                    else:
+                        logger.error(f"Redis connection error after {max_retries + 1} attempts: {e}")
+                else:
+                    raise
+
+        raise last_error
 
     async def delete(self, *keys: str) -> int:
         """删除键"""

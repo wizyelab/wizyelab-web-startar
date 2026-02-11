@@ -10,6 +10,7 @@ from app.schemas.profile import (
     ProfileInfoRequest,
     ProfileData,
     GuideData,
+    GuideListRequest,
     ProfileUpdateRequest,
     ProfilePostsRequest,
     ProfilePostsData,
@@ -48,15 +49,17 @@ async def get_profile_info(
 
 @router.post("/collect/guide_list", response_model=BaseResponse[GuideData])
 async def get_guide_list(
+    request: GuideListRequest,
     db: AsyncSession = Depends(get_async_db),
 ):
     """
     获取Profile收集的引导问题列表
 
     用于新用户注册后的引导流程
+    tag_id=0 返回全部，否则按标签过滤
     """
     service = ProfileService(db)
-    code, message, data = await service.get_guide_list()
+    code, message, data = await service.get_guide_list(tag_id=request.tag_id)
     return BaseResponse(code=code, message=message, data=data)
 
 
@@ -113,7 +116,7 @@ async def create_post(
         title=request.title,
         description=request.description,
         content=request.content,
-        img_urls=request.img_urls,
+        images=[img.model_dump() for img in request.images] if request.images else [],
         video=request.video.model_dump() if request.video else None,
         tags=request.tags,
     )

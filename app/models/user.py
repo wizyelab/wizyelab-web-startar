@@ -10,7 +10,7 @@ import uuid
 import time
 from typing import Optional
 
-from sqlalchemy import Column, BigInteger, String, Text, SmallInteger, Index
+from sqlalchemy import Column, BigInteger, String, Text, SmallInteger, Index, JSON
 from sqlalchemy.dialects.mysql import TINYINT
 
 from app.infrastructure.database.connection import Base
@@ -70,6 +70,9 @@ class User(Base):
         TINYINT(unsigned=True), nullable=False, default=1, comment="状态：0-删除，1-正常"
     )
 
+    # Onboarding 数据
+    onboarding = Column(JSON, nullable=True, comment="用户onboarding数据")
+
     # 扩展字段
     extra = Column(Text, nullable=True, comment="扩展字段")
 
@@ -105,6 +108,7 @@ class User(Base):
             "gender": self.gender,
             "location": self.location,
             "login_provider": self.login_provider,
+            "onboarding": self.onboarding,
             "status": self.status,
             "create_time": self.create_time,
             "update_time": self.update_time,

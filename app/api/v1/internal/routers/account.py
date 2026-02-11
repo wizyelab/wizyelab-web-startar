@@ -9,8 +9,8 @@ from app.schemas.account import (
     LoginData,
     SendVerifyCodeRequest,
     LogoutRequest,
-    ErrorCode,
 )
+from app.core.error_codes import ErrorCode
 from app.services.account_service import AccountService
 from app.infrastructure.database.connection import get_async_db
 from app.core.logging import setup_logger

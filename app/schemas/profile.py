@@ -3,7 +3,7 @@
 from typing import Any, Dict, List, Optional
 from pydantic import BaseModel, Field
 
-from .common import Video, Author, PaginationData
+from .common import Video, Image, Author, PaginationData
 
 
 # ========================= 用户Profile =========================
@@ -46,13 +46,15 @@ class OptionItem(BaseModel):
 class GuideItem(BaseModel):
     """引导项"""
 
-    id: str = Field(default="", description="引导项ID")
+    id: int = Field(default=0, description="引导项ID")
+    tag_id: int = Field(default=0, description="关联标签ID")
     style: int = Field(default=0, description="引导样式: 0-无样式, 1-选项条, 2-选项卡")
     guide_words: str = Field(default="", description="引导话术")
     profile_key: str = Field(default="", description="profile页的字段名")
     sort: int = Field(default=0, description="排序")
     options: List[OptionItem] = Field(default_factory=list, description="选项列表")
-    is_required: bool = Field(default=False, description="是否必填")
+    head_img: Optional[Image] = Field(default=None, description="Logo上半部分图片")
+    body_img: Optional[Image] = Field(default=None, description="Logo下半部分图片")
 
 
 class GuideData(BaseModel):
@@ -60,6 +62,15 @@ class GuideData(BaseModel):
 
     items: List[GuideItem] = Field(default_factory=list, description="引导项列表")
     total_steps: int = Field(default=0, description="总步骤数")
+
+
+# ========================= 引导列表请求 =========================
+
+
+class GuideListRequest(BaseModel):
+    """获取引导列表请求"""
+
+    tag_id: int = Field(default=0, description="标签ID，0=全部")
 
 
 # ========================= 更新Profile =========================
@@ -73,6 +84,14 @@ class ProfileUpdateRequest(BaseModel):
     bio: Optional[str] = Field(default=None, max_length=500, description="个人简介")
     gender: Optional[int] = Field(default=None, description="性别: 1-male, 2-female, 3-other")
     location: Optional[str] = Field(default=None, description="位置")
+    onboarding: Optional[Dict[str, Any]] = Field(
+        default=None,
+        description="用户onboarding数据，JSON格式"
+    )
+    extra: Optional[List[Dict[str, Any]]] = Field(
+        default=None,
+        description="on-boarding问答数据，格式: [{question: str, answer: str, ...}, ...]"
+    )
 
     model_config = {"extra": "allow"}
 
@@ -88,8 +107,7 @@ class ProfilePost(BaseModel):
     title: str = Field(default="", description="标题")
     description: str = Field(default="", description="描述")
     content: str = Field(default="", description="内容")
-    thumbnail_url: str = Field(default="", description="缩略图")
-    img_urls: List[str] = Field(default_factory=list, description="图片列表")
+    images: List[Image] = Field(default_factory=list, description="图片列表")
     video: Optional[Video] = Field(default=None, description="视频信息")
     author: Optional[Author] = Field(default=None, description="作者信息")
     like_count: int = Field(default=0, description="点赞数")
@@ -126,7 +144,7 @@ class CreatePostRequest(BaseModel):
     title: str = Field(default="", max_length=200, description="标题")
     description: str = Field(default="", max_length=2000, description="描述/正文")
     content: str = Field(default="", description="内容")
-    img_urls: List[str] = Field(default_factory=list, description="图片URL列表")
+    images: List[Image] = Field(default_factory=list, description="图片列表")
     video: Optional[Video] = Field(default=None, description="视频信息")
     tags: List[int] = Field(default_factory=list, description="标签ID列表")
 

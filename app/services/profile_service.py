@@ -3,7 +3,7 @@ Profile 服务模块
 
 处理用户资料、帖子、反馈等业务逻辑
 """
-
+import json
 from datetime import datetime
 from typing import Optional, Tuple, List, Dict, Any
 
@@ -11,13 +11,14 @@ from sqlalchemy import select, update, func, and_
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.logging import setup_logger
+from app.core.error_codes import ErrorCode
 from app.models.user import User
 from app.models.profile import (
-    UserProfile, UserStats, UserFollow, Post, UserAction,
+    UserStats, UserFollow, Post, UserAction,
     UserFeedback, GuideItemModel, PostStatus, ActionType,
     current_timestamp_ms
 )
-from app.schemas.common import Video, Author
+from app.schemas.common import Video, Image, Author
 from app.schemas.profile import (
     ProfileData, GuideData, GuideItem, OptionItem,
     ProfilePost, ProfilePostsData, CreatePostData,
@@ -42,24 +43,27 @@ class ProfileService:
         获取用户 Profile
 
         查询流程：
-        1. 查询 users 表获取基本信息
-        2. 查询 user_profiles 表获取画像数据
-        3. 查询 user_stats 表获取统计数据
-        4. 查询 user_follows 表判断是否已关注
+        1. 查询 users 表获取基本信息和 onboarding 数据
+        2. 查询 user_stats 表获取统计数据
+        3. 查询 user_follows 表判断是否已关注
         """
         try:
-            # 1. 查询用户基本信息
+            # 1. 查询用户基本信息（包含 onboarding）
             stmt = select(User).where(User.user_id == target_user_id, User.status == 1)
             result = await self.db.execute(stmt)
             user = result.scalar_one_or_none()
 
             if not user:
-                return 1006, "用户不存在", None
+                return ErrorCode.USER_NOT_FOUND, "用户不存在", None
 
-            # 2. 查询用户画像
-            stmt = select(UserProfile).where(UserProfile.user_id == target_user_id)
-            result = await self.db.execute(stmt)
-            profile = result.scalar_one_or_none()
+            # 2. 解析 onboarding 中的 interest_tags
+            interest_tags = []
+            if user.onboarding:
+                try:
+                    onboarding_data = json.loads(user.onboarding) if isinstance(user.onboarding, str) else user.onboarding
+                    interest_tags = onboarding_data.get("interest_tags", [])
+                except (json.JSONDecodeError, TypeError):
+                    pass
 
             # 3. 查询用户统计
             stmt = select(UserStats).where(UserStats.user_id == target_user_id)
@@ -72,14 +76,14 @@ class ProfileService:
                 is_followed = await self._check_follow_status(current_user_id, target_user_id)
 
             # 5. 构建响应
-            return 0, "成功", ProfileData(
+            return ErrorCode.SUCCESS, "成功", ProfileData(
                 user_id=user.user_id,
                 user_name=user.user_name or "",
                 avatar=user.avatar or "",
                 bio=user.bio or "",
                 gender=user.gender or 0,
                 location=user.location or "",
-                interest_tags=profile.interest_tags if profile and profile.interest_tags else [],
+                interest_tags=interest_tags,
                 follower_count=stats.follower_count if stats else 0,
                 following_count=stats.following_count if stats else 0,
                 post_count=stats.post_count if stats else 0,
@@ -88,7 +92,7 @@ class ProfileService:
             )
         except Exception as e:
             logger.error(f"获取用户Profile失败: {e}")
-            return 1, "系统错误", None
+            return ErrorCode.GENERAL_ERROR, "系统错误", None
 
     async def update_profile(
         self, user_id: str, data: Dict[str, Any]
@@ -97,30 +101,41 @@ class ProfileService:
         更新 Profile
 
         更新流程：
-        1. 分离基本信息字段和画像字段
+        1. 分离基本信息字段和 onboarding 字段
         2. 更新 users 表（name, avatar, bio, gender, location）
-        3. 更新/插入 user_profiles 表（interest_tags, skill_level 等）
+        3. 更新 users.onboarding 字段（原 user_profiles.profile_data）
         """
         try:
-            user_fields = {"name", "avatar", "bio", "gender", "location"}
-            profile_fields = {"interest_tags", "skill_level", "equipment_config"}
+            # 1. 分离字段
+            user_fields = {"name", "avatar", "bio", "gender", "location", "onboarding"}
+            profile_fields = {"interest_tags", "skill_level", "equipment_config", "extra"}
 
             user_data = {}
-            profile_data = {}
-            extra_data = {}
+            extra = {}
 
             for key, value in data.items():
                 if value is None:
                     continue
+                if isinstance(value, dict):
+                    value = json.dumps(value)
                 if key in user_fields:
+                    # name -> user_name
                     db_key = "user_name" if key == "name" else key
                     user_data[db_key] = value
-                elif key in profile_fields:
-                    profile_data[key] = value
                 else:
-                    extra_data[key] = value
+                    extra[key] = value
 
-            # 更新 users 表
+            # 2. 查询现有用户
+            stmt = select(User).where(User.user_id == user_id)
+            result = await self.db.execute(stmt)
+            user = result.scalar_one_or_none()
+
+            if not user:
+                return ErrorCode.USER_NOT_FOUND, "用户不存在"
+
+            # 3. 更新 users 表基本字段
+            if extra:
+                user_data['extra'] = json.dumps(extra)
             if user_data:
                 user_data["update_time"] = current_timestamp_ms()
                 stmt = (
@@ -129,41 +144,31 @@ class ProfileService:
                     .values(**user_data)
                 )
                 await self.db.execute(stmt)
-
-            # 更新/插入 user_profiles 表
-            if profile_data or extra_data:
-                profile = await self._get_or_create_user_profile(user_id)
-
-                for key, value in profile_data.items():
-                    setattr(profile, key, value)
-
-                if extra_data:
-                    existing = profile.profile_data or {}
-                    existing.update(extra_data)
-                    profile.profile_data = existing
-
             await self.db.commit()
-            return 0, "成功"
+            return ErrorCode.SUCCESS, "成功"
 
         except Exception as e:
             logger.error(f"更新Profile失败: {e}")
             await self.db.rollback()
-            return 1, "系统错误"
+            return ErrorCode.GENERAL_ERROR, "系统错误"
 
     # ==================== 引导相关 ====================
 
-    async def get_guide_list(self) -> Tuple[int, str, Optional[GuideData]]:
+    async def get_guide_list(self, tag_id: int = 0) -> Tuple[int, str, Optional[GuideData]]:
         """
         获取引导列表
 
         查询 guide_items 表，按 sort_order 排序
+        tag_id=0 返回全部，否则按 tag_id 过滤
         """
         try:
             stmt = (
                 select(GuideItemModel)
                 .where(GuideItemModel.status == 1)
-                .order_by(GuideItemModel.sort_order)
             )
+            if tag_id > 0:
+                stmt = stmt.where(GuideItemModel.tag_id == tag_id)
+            stmt = stmt.order_by(GuideItemModel.sort_order)
             result = await self.db.execute(stmt)
             guide_items = result.scalars().all()
 
@@ -178,23 +183,51 @@ class ProfileService:
                             icon_url=opt.get("icon_url", ""),
                         ))
 
+                # 构建 head_img
+                head_img = None
+                if item.head_img:
+                    head_img = Image(
+                        id=item.head_img.get("id", ""),
+                        height=item.head_img.get("height", 0),
+                        width=item.head_img.get("width", 0),
+                        format=item.head_img.get("format", ""),
+                        size=item.head_img.get("size", 0),
+                        main_url=item.head_img.get("main_url", ""),
+                        back_urls=item.head_img.get("back_urls", []),
+                    )
+
+                # 构建 body_img
+                body_img = None
+                if item.body_img:
+                    body_img = Image(
+                        id=item.body_img.get("id", ""),
+                        height=item.body_img.get("height", 0),
+                        width=item.body_img.get("width", 0),
+                        format=item.body_img.get("format", ""),
+                        size=item.body_img.get("size", 0),
+                        main_url=item.body_img.get("main_url", ""),
+                        back_urls=item.body_img.get("back_urls", []),
+                    )
+
                 items.append(GuideItem(
-                    id=item.guide_id,
+                    id=item.id,
+                    tag_id=item.tag_id,
                     style=item.style,
                     guide_words=item.guide_words or "",
                     profile_key=item.profile_key or "",
                     sort=item.sort_order,
                     options=options,
-                    is_required=bool(item.is_required),
+                    head_img=head_img,
+                    body_img=body_img,
                 ))
 
-            return 0, "成功", GuideData(
+            return ErrorCode.SUCCESS, "成功", GuideData(
                 items=items,
                 total_steps=len(items),
             )
         except Exception as e:
             logger.error(f"获取引导列表失败: {e}")
-            return 1, "系统错误", None
+            return ErrorCode.GENERAL_ERROR, "系统错误", None
 
     # ==================== 帖子相关 ====================
 
@@ -219,7 +252,7 @@ class ProfileService:
             user = result.scalar_one_or_none()
 
             if not user:
-                return 1006, "用户不存在", None
+                return ErrorCode.USER_NOT_FOUND, "用户不存在", None
 
             # 2. 查询总数
             count_stmt = (
@@ -273,7 +306,7 @@ class ProfileService:
                         height=post.video.get("height", 0),
                         width=post.video.get("width", 0),
                         duration=post.video.get("duration", 0),
-                        cover_url=post.video.get("cover_url", ""),
+                        cover=post.video.get("cover"),
                         main_url=post.video.get("main_url", ""),
                         back_urls=post.video.get("back_urls", []),
                     )
@@ -284,8 +317,7 @@ class ProfileService:
                     title=post.title or "",
                     description=post.description or "",
                     content=post.content or "",
-                    thumbnail_url=post.thumbnail_url or "",
-                    img_urls=post.img_urls or [],
+                    images=json.loads(post.images) if post.images else [],
                     video=video_data,
                     author=Author(
                         user_id=user.user_id,
@@ -305,7 +337,7 @@ class ProfileService:
 
             has_more = (page * page_size) < total
 
-            return 0, "成功", ProfilePostsData(
+            return ErrorCode.SUCCESS, "成功", ProfilePostsData(
                 items=items,
                 total=total,
                 page=page,
@@ -314,11 +346,11 @@ class ProfileService:
             )
         except Exception as e:
             logger.error(f"获取用户帖子列表失败: {e}")
-            return 1, "系统错误", None
+            return ErrorCode.GENERAL_ERROR, "系统错误", None
 
     async def create_post(
         self, user_id: str, post_type: int, title: str,
-        description: str, content: str, img_urls: List[str],
+        description: str, content: str, images: List[Dict],
         video: Optional[Dict], tags: List[int]
     ) -> Tuple[int, str, Optional[CreatePostData]]:
         """
@@ -329,20 +361,13 @@ class ProfileService:
         2. 更新 user_stats.post_count
         """
         try:
-            thumbnail_url = ""
-            if post_type == 1 and video:
-                thumbnail_url = video.get("cover_url", "")
-            elif post_type == 2 and img_urls:
-                thumbnail_url = img_urls[0]
-
             post = Post(
                 user_id=user_id,
                 post_type=post_type,
                 title=title,
                 description=description,
                 content=content,
-                thumbnail_url=thumbnail_url,
-                img_urls=img_urls if img_urls else None,
+                images=json.dumps(images) if images else None,
                 video=video,
                 status=PostStatus.NORMAL,
             )
@@ -355,11 +380,11 @@ class ProfileService:
 
             await self.db.commit()
 
-            return 0, "成功", CreatePostData(post_id=post.post_id)
+            return ErrorCode.SUCCESS, "成功", CreatePostData(post_id=post.post_id)
         except Exception as e:
             logger.error(f"创建帖子失败: {e}")
             await self.db.rollback()
-            return 1, "系统错误", None
+            return ErrorCode.GENERAL_ERROR, "系统错误", None
 
     async def delete_post(
         self, user_id: str, post_id: str
@@ -378,13 +403,13 @@ class ProfileService:
             post = result.scalar_one_or_none()
 
             if not post:
-                return 4005, "帖子不存在"
+                return ErrorCode.POST_NOT_FOUND, "帖子不存在"
 
             if post.user_id != user_id:
-                return 4006, "无权操作此帖子"
+                return ErrorCode.POST_NO_PERMISSION, "无权操作此帖子"
 
             if post.status == PostStatus.DELETED:
-                return 4005, "帖子已删除"
+                return ErrorCode.POST_DELETED, "帖子已删除"
 
             post.status = PostStatus.DELETED
             post.update_time = current_timestamp_ms()
@@ -394,11 +419,11 @@ class ProfileService:
                 stats.post_count -= 1
 
             await self.db.commit()
-            return 0, "成功"
+            return ErrorCode.SUCCESS, "成功"
         except Exception as e:
             logger.error(f"删除帖子失败: {e}")
             await self.db.rollback()
-            return 1, "系统错误"
+            return ErrorCode.GENERAL_ERROR, "系统错误"
 
     # ==================== 关注相关 ====================
 
@@ -408,14 +433,14 @@ class ProfileService:
         """关注/取关用户"""
         try:
             if user_id == target_user_id:
-                return 4001, "不能关注自己", None
+                return ErrorCode.CANNOT_FOLLOW_SELF, "不能关注自己", None
 
             stmt = select(User).where(User.user_id == target_user_id, User.status == 1)
             result = await self.db.execute(stmt)
             target_user = result.scalar_one_or_none()
 
             if not target_user:
-                return 1006, "用户不存在", None
+                return ErrorCode.USER_NOT_FOUND, "用户不存在", None
 
             stmt = select(UserFollow).where(
                 UserFollow.follower_id == user_id,
@@ -426,7 +451,7 @@ class ProfileService:
 
             if is_follow:
                 if follow and follow.status == 1:
-                    return 4002, "已经关注该用户", None
+                    return ErrorCode.ALREADY_FOLLOWED, "已经关注该用户", None
 
                 if follow:
                     follow.status = 1
@@ -445,7 +470,7 @@ class ProfileService:
                 target_stats.follower_count += 1
             else:
                 if not follow or follow.status == 0:
-                    return 4003, "未关注该用户", None
+                    return ErrorCode.NOT_FOLLOWED, "未关注该用户", None
 
                 follow.status = 0
                 follow.update_time = current_timestamp_ms()
@@ -459,14 +484,14 @@ class ProfileService:
 
             await self.db.commit()
 
-            return 0, "成功", FollowData(
+            return ErrorCode.SUCCESS, "成功", FollowData(
                 is_followed=is_follow,
                 follower_count=target_stats.follower_count,
             )
         except Exception as e:
             logger.error(f"关注/取关失败: {e}")
             await self.db.rollback()
-            return 1, "系统错误", None
+            return ErrorCode.GENERAL_ERROR, "系统错误", None
 
     async def get_followers(
         self, user_id: str, current_user_id: Optional[str],
@@ -532,14 +557,14 @@ class ProfileService:
 
             has_more = (page * page_size) < total
 
-            return 0, "成功", FollowListData(
+            return ErrorCode.SUCCESS, "成功", FollowListData(
                 items=items,
                 total=total,
                 has_more=has_more,
             )
         except Exception as e:
             logger.error(f"获取粉丝列表失败: {e}")
-            return 1, "系统错误", None
+            return ErrorCode.GENERAL_ERROR, "系统错误", None
 
     # ==================== 反馈相关 ====================
 
@@ -561,11 +586,11 @@ class ProfileService:
             await self.db.commit()
 
             logger.info(f"用户反馈已提交: user_id={user_id}, type={feedback_type}")
-            return 0, "成功"
+            return ErrorCode.SUCCESS, "成功"
         except Exception as e:
             logger.error(f"提交反馈失败: {e}")
             await self.db.rollback()
-            return 4004, "反馈提交失败"
+            return ErrorCode.FEEDBACK_FAILED, "反馈提交失败"
 
     # ==================== 私有方法 ====================
 
@@ -581,19 +606,6 @@ class ProfileService:
             await self.db.flush()
 
         return stats
-
-    async def _get_or_create_user_profile(self, user_id: str) -> UserProfile:
-        """获取或创建用户画像记录"""
-        stmt = select(UserProfile).where(UserProfile.user_id == user_id)
-        result = await self.db.execute(stmt)
-        profile = result.scalar_one_or_none()
-
-        if not profile:
-            profile = UserProfile(user_id=user_id)
-            self.db.add(profile)
-            await self.db.flush()
-
-        return profile
 
     async def _check_follow_status(
         self, follower_id: str, following_id: str

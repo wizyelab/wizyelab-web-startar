@@ -166,8 +166,7 @@ class Post(Base):
     title = Column(String(200), nullable=True, comment="标题")
     description = Column(Text, nullable=True, comment="描述")
     content = Column(Text, nullable=True, comment="内容正文")
-    thumbnail_url = Column(String(500), nullable=True, comment="缩略图URL")
-    img_urls = Column(JSON, nullable=True, comment="图片URL列表")
+    images = Column(Text, nullable=True, comment="图片列表JSON(List[Image])")
     video = Column(JSON, nullable=True, comment="视频信息JSON")
 
     # 统计
@@ -253,13 +252,14 @@ class GuideItemModel(Base):
     __tablename__ = "guide_items"
 
     id = Column(BigInteger, primary_key=True, autoincrement=True, comment="自增主键")
-    guide_id = Column(String(50), nullable=False, comment="引导项ID：interests/skill_level/equipment")
+    tag_id = Column(BigInteger, nullable=False, comment="标签id")
     style = Column(TINYINT(unsigned=True), nullable=False, default=0, comment="引导样式：0-对话式，1-选项条，2-选项卡")
     guide_words = Column(Text, nullable=True, comment="引导话术")
     profile_key = Column(String(50), nullable=True, comment="对应profile字段名")
     sort_order = Column(Integer, nullable=False, default=0, comment="排序")
-    is_required = Column(TINYINT(unsigned=True), nullable=False, default=0, comment="是否必填：0-否，1-是")
     options = Column(JSON, nullable=True, comment="选项列表JSON")
+    head_img = Column(JSON, nullable=True, comment="Logo上半部分图片")
+    body_img = Column(JSON, nullable=True, comment="Logo下半部分图片")
     status = Column(TINYINT(unsigned=True), nullable=False, default=1, comment="状态：0-禁用，1-启用")
 
     extra = Column(Text, nullable=True, comment="扩展字段")
@@ -267,7 +267,7 @@ class GuideItemModel(Base):
     update_time = Column(BigInteger, nullable=False, default=current_timestamp_ms, onupdate=current_timestamp_ms, comment="更新时间")
 
     __table_args__ = (
-        Index("idx_guide_sort_order", "sort_order"),
+        Index("idx_sort_order", "sort_order"),
         {"comment": "引导配置表"},
     )
 
@@ -278,13 +278,11 @@ class Tag(Base):
     """
     __tablename__ = "tags"
 
-    id = Column(BigInteger, primary_key=True, autoincrement=True, comment="自增主键")
-    tag_id = Column(String(36), unique=True, nullable=False, comment="标签ID")
-    tag_name = Column(String(50), unique=True, nullable=False, comment="标签名称")
+    id = Column(BigInteger, primary_key=True, autoincrement=True, comment="自增主键, 标签ID")
+    tag_name = Column(String(50), nullable=False, comment="标签名称：Padel/Tennis/Pickleball")
     tag_icon = Column(String(500), nullable=True, comment="标签图标URL")
     tag_category = Column(String(50), nullable=True, comment="标签分类：sport/equipment/skill")
-    parent_tag_id = Column(String(36), nullable=True, comment="父标签ID")
-    sort_order = Column(Integer, nullable=False, default=0, comment="排序")
+    sort_order = Column(Integer, nullable=False, default=0, comment="排序，数字越小越靠前")
     status = Column(TINYINT(unsigned=True), nullable=False, default=1, comment="状态：0-禁用，1-启用")
 
     extra = Column(Text, nullable=True, comment="扩展字段")
@@ -292,7 +290,31 @@ class Tag(Base):
     update_time = Column(BigInteger, nullable=False, default=current_timestamp_ms, onupdate=current_timestamp_ms, comment="更新时间")
 
     __table_args__ = (
-        Index("idx_tag_category", "tag_category"),
-        Index("idx_tag_sort_order", "sort_order"),
+        Index("idx_sort_order", "sort_order"),
         {"comment": "标签表"},
+    )
+
+
+class UserTag(Base):
+    """
+    用户标签关联表
+
+    存储用户与标签的多对多关联关系
+    """
+    __tablename__ = "user_tags"
+
+    id = Column(BigInteger, primary_key=True, autoincrement=True, comment="自增主键")
+    user_id = Column(String(20), nullable=False, comment="用户ID，关联users.user_id")
+    tag_id = Column(BigInteger, nullable=False, comment="标签ID，关联tags.id")
+    level = Column(String(20), nullable=True, comment="等级：beginner/intermediate/advanced/professional")
+    priority = Column(TINYINT(unsigned=True), default=0, comment="优先级/偏好程度，数字越大越优先")
+    status = Column(TINYINT(unsigned=True), nullable=False, default=1, comment="状态：0-删除，1-正常")
+
+    extra = Column(Text, nullable=True, comment="扩展字段")
+    create_time = Column(BigInteger, nullable=False, default=current_timestamp_ms, comment="创建时间")
+    update_time = Column(BigInteger, nullable=False, default=current_timestamp_ms, onupdate=current_timestamp_ms, comment="更新时间")
+
+    __table_args__ = (
+        Index("uk_user_tag", "user_id", "tag_id", unique=True),
+        {"comment": "用户标签关联表"},
     )

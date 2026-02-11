@@ -3,6 +3,8 @@
 from typing import Generic, List, Optional, TypeVar
 from pydantic import BaseModel, Field
 
+from app.schemas.file import MultiImage
+
 T = TypeVar("T")
 
 
@@ -27,7 +29,7 @@ class Video(BaseModel):
     height: int = Field(default=0, description="视频高度")
     width: int = Field(default=0, description="视频宽度")
     duration: int = Field(default=0, description="视频时长(秒)")
-    cover_url: str = Field(default="", description="封面图")
+    cover: Optional[MultiImage] = Field(default=None, description="封面图(多分辨率)")
     main_url: str = Field(default="", description="主链接")
     back_urls: List[str] = Field(default_factory=list, description="备用链接")
 
@@ -42,7 +44,6 @@ class Image(BaseModel):
     size: int = Field(default=0, description="文件大小(字节)")
     main_url: str = Field(default="", description="主链接")
     back_urls: List[str] = Field(default_factory=list, description="备用链接")
-    thumbnail_url: str = Field(default="", description="缩略图链接")
 
 
 class Author(BaseModel):

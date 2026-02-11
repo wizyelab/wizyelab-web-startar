@@ -469,6 +469,141 @@ docker run -d -p 8000:8000 \
 - **AI 集成**: LangChain Agent + 工具系统 + 对话记忆
 - **对象存储**: 阿里云 OSS 集成，支持分片上传/下载
 
+## 框架能力
+
+### 1. 数据库连接 (`app/infrastructure/database/`)
+
+**特性**:
+- **双模式支持**: 同步和异步数据库操作
+- **SQLAlchemy 2.0**: 完整的异步支持
+- **延迟初始化**: 异步引擎在事件循环启动后初始化，避免事件循环绑定问题
+- **NullPool**: 异步引擎使用 NullPool，解决多 worker 模式下的事件循环不匹配问题
+- **连接池管理**: 同步引擎使用 QueuePool，支持连接健康检查 (pool_pre_ping)
+- **依赖注入**: 支持 FastAPI 依赖注入和上下文管理器两种使用方式
+
+**使用示例**:
+```python
+from app.infrastructure.database.connection import get_async_db
+from fastapi import Depends
+
+@app.get("/users")
+async def get_users(db: AsyncSession = Depends(get_async_db)):
+    result = await db.execute(select(User))
+    return result.scalars().all()
+```
+
+### 2. Redis 客户端 (`app/infrastructure/cache/`)
+
+**特性**:
+- **自动重连机制**: 连接失败时自动重试，带锁防止并发重连
+- **连接健康监控**: health_check_interval=30，自动检测并重建断开的连接
+- **全面的操作支持**:
+  - 基本操作: get, set, delete, exists, expire, ttl
+  - JSON 操作: get_json, set_json (自动序列化)
+  - 缓存操作: cache_get, cache_set, cache_delete, cache_clear_pattern (带前缀)
+  - Hash 操作: hget, hset, hgetall, hdel
+  - List 操作: lpush, rpush, lpop, rpop, lrange, llen
+  - Set 操作: sadd, srem, smembers, sismember
+  - 计数器: incr, decr
+  - 发布订阅: publish, subscribe
+- **分布式锁**: 上下文管理器支持，自动获取和释放锁
+- **线程安全**: 使用 asyncio.Lock 确保重连过程的线程安全
+
+**使用示例**:
+```python
+from app.infrastructure.cache.redis_client import redis_client
+
+# 基本操作
+await redis_client.set("key", "value", ex=3600)
+value = await redis_client.get("key")
+
+# JSON 缓存
+await redis_client.cache_set("user:123", {"name": "Alice"}, ttl=3600)
+user = await redis_client.cache_get("user:123")
+
+# 分布式锁
+async with redis_client.lock("my_lock", timeout=10):
+    # 执行需要加锁的操作
+    pass
+```
+
+### 3. 对象存储 (`app/infrastructure/storage/`)
+
+**特性**:
+- **阿里云 OSS 集成**: 完整的 OSS 操作支持
+- **上传操作**: 简单上传、分片上传、批量上传、签名 URL
+- **下载操作**: 简单下载、断点续传、批量下载
+- **对象管理**: 元数据查询、删除、复制、列举
+- **CORS 配置**: 支持跨域资源共享配置
+- **线程池执行**: 异步操作使用线程池，不阻塞事件循环
+
+### 4. 监控与可观测性 (`app/infrastructure/monitoring/`)
+
+**特性**:
+- **Prometheus 指标**: 自动收集 HTTP 请求、Agent 调用、LLM 使用、缓存命中等指标
+- **健康检查**:
+  - `/health`: 详细健康状态（包含数据库、Redis、LLM 组件状态）
+  - `/livez`: 简单存活检查
+  - `/readyz`: 就绪检查（503 如果不健康）
+- **结构化日志**: JSON 格式日志，包含 trace_id 用于分布式追踪
+- **请求追踪**: 基于 Snowflake 算法的 trace_id，支持跨服务追踪
+
+### 5. 配置管理 (`app/core/config.py`)
+
+**特性**:
+- **多环境支持**: dev, staging, prod
+- **分层配置**:
+  1. base.yaml (共享默认值)
+  2. {env}.yaml (环境特定配置)
+  3. 环境变量替换 (`${VAR_NAME}`)
+  4. WIZYELAB_* 前缀覆盖
+- **类型安全**: 基于 Pydantic 的配置验证
+- **深度合并**: 环境配置自动覆盖基础配置
+
+### 6. 中间件系统 (`app/middleware/`)
+
+**特性**:
+- **请求上下文**: 全局请求上下文（ContextVar），包含 trace_id、user_id、session_id 等
+- **会话管理**: 双通道支持（Header + Cookie），适配移动端和 Web 端
+- **认证执行**: 可配置的公开路径白名单，自动 401 响应
+- **限流**: 基于 Redis 的分布式限流，支持滑动窗口算法
+- **请求日志**: 自动记录请求/响应，包含性能指标
+
+### 7. Snowflake ID 生成器 (`app/core/snowflake.py`)
+
+**特性**:
+- **分布式唯一 ID**: 64 位结构（时间戳 + 数据中心 ID + 工作节点 ID + 序列号）
+- **线程安全**: 单例模式 + 锁机制
+- **时钟偏移检测**: 防止时钟回拨导致 ID 重复
+- **高吞吐**: 每毫秒 4096 个 ID
+- **趋势递增**: 适合数据库索引
+
+## 生产就绪特性
+
+### 高可用性
+- ✅ Redis 自动重连机制
+- ✅ 数据库连接池健康检查
+- ✅ 多 worker 模式支持（事件循环隔离）
+- ✅ 优雅关闭（lifespan 管理）
+
+### 可观测性
+- ✅ Prometheus 指标收集
+- ✅ 结构化 JSON 日志
+- ✅ 分布式追踪（trace_id）
+- ✅ 健康检查端点
+
+### 安全性
+- ✅ 会话管理（Redis 存储）
+- ✅ 认证中间件
+- ✅ 限流保护
+- ✅ CORS 配置
+
+### 性能
+- ✅ 全异步架构
+- ✅ 连接池管理
+- ✅ 缓存支持
+- ✅ 分布式锁
+
 ## 许可证
 
 MIT

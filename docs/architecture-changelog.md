@@ -75,3 +75,56 @@
 - **验证码机制**：Redis 存储，按 `email + device_id` 维度隔离，可配置有效期和长度
 - **错误码体系**：`ErrorCode` 类定义分层错误码（通用 0-499、账户 1000-1999、Firebase 2000-2999）
 - **数据模型**：完整的用户表（User/UserDevice/UserSession）和 Profile 表（UserProfile/UserStats/UserFollow/Post/UserAction/UserFeedback/GuideItemModel/Tag）
+
+---
+
+## 2026-02-07 — 框架能力增强（Phase 3）
+
+从 `joiiee-server-startar` 项目提取核心框架能力，提升系统稳定性和生产就绪度。
+
+### 增强文件
+
+| 文件 | 变更内容 |
+|------|---------|
+| `app/infrastructure/cache/redis_client.py` | **Redis 自动重连机制**：新增 `_reconnect()` 方法，使用 `asyncio.Lock` 防止并发重连；`get()` 和 `set()` 方法增加重试逻辑（max_retries=2），检测连接错误（closed/connection/handler）时自动重连；连接池配置增加 `health_check_interval=30` 和 `retry_on_timeout=True` |
+| `app/infrastructure/database/connection.py` | **数据库延迟初始化**：异步引擎改为延迟初始化模式，新增 `init_async_engine()` 函数在事件循环启动后调用；使用 `NullPool` 替代连接池，解决多 worker 模式下事件循环绑定问题；`get_async_db()`、`get_async_db_context()`、`async_init_db()` 增加初始化检查；`close_db()` 增加 `_async_engine_initialized` 重置和空值检查 |
+| `main.py` | **lifespan 增强**：在 Redis 初始化前调用 `init_async_engine()`，确保异步引擎在事件循环运行后初始化 |
+| `README.md` | **文档完善**：新增"框架能力"章节，详细说明数据库连接、Redis 客户端、对象存储、监控、配置管理、中间件、Snowflake ID 等核心能力；新增"生产就绪特性"章节，列举高可用性、可观测性、安全性、性能等特性 |
+| `docs/architecture-changelog.md` | **变更记录**：新增 Phase 3 记录，说明框架增强内容和收益 |
+
+### 新增文件
+
+| 文件 | 说明 |
+|------|------|
+| `docs/infrastructure/README.md` | 基础设施组件文档，详细说明数据库、Redis、OSS、监控等组件的特性和使用方法 |
+
+### 架构要点
+
+#### Redis 自动重连机制
+- **线程安全重连**：使用 `asyncio.Lock` 防止多个协程同时重连
+- **连接健康检查**：重连前先 ping 检查，避免不必要的重连
+- **优雅关闭旧连接**：使用 `asyncio.wait_for()` 设置超时，防止挂起
+- **重试逻辑**：`get()` 和 `set()` 方法支持最多 2 次重试
+- **错误检测**：识别 "closed"、"connection"、"handler" 等连接错误关键词
+
+#### 数据库延迟初始化
+- **事件循环绑定**：异步引擎在 FastAPI lifespan 中初始化，确保绑定到正确的事件循环
+- **NullPool 策略**：禁用连接池，每次操作创建新连接，避免连接跨事件循环复用
+- **多 worker 支持**：解决 uvicorn --workers N 模式下的事件循环不匹配问题
+- **初始化检查**：所有异步数据库操作前检查引擎是否已初始化，未初始化抛出 RuntimeError
+
+### 收益
+
+#### 稳定性提升
+- ✅ **Redis 连接失败自动恢复**：网络抖动、Redis 重启等场景下自动重连，无需重启服务
+- ✅ **多 worker 模式稳定**：解决事件循环绑定问题，支持生产环境多 worker 部署
+- ✅ **并发安全**：重连过程使用锁机制，防止雷鸣群效应
+
+#### 生产就绪
+- ✅ **高可用性**：自动故障恢复，减少人工介入
+- ✅ **可扩展性**：支持多 worker 水平扩展
+- ✅ **可维护性**：完善的文档和错误提示
+
+#### 性能权衡
+- ⚠️ **数据库性能**：NullPool 模式下每次操作创建新连接，性能略低于连接池模式，但换取了稳定性
+- ✅ **Redis 性能**：自动重连不影响正常操作性能，仅在连接失败时触发

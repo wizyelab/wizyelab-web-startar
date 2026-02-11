@@ -18,7 +18,8 @@ from app.services.email_service import email_service
 from app.services.auth_service import auth_service, SESSION_TTL
 from app.middleware.request_context import set_session_id_for_response
 from app.infrastructure.cache.redis_client import redis_client
-from app.schemas.account import ErrorCode, LoginData, UserInfo
+from app.core.error_codes import ErrorCode
+from app.schemas.account import LoginData, UserInfo
 
 logger = setup_logger(__name__)
 

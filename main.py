@@ -25,6 +25,7 @@ async def lifespan(app: FastAPI):
     应用生命周期管理
 
     启动时:
+    - 初始化异步数据库引擎（必须在事件循环运行后）
     - 初始化数据库连接
     - 初始化 Redis 连接
 
@@ -34,13 +35,21 @@ async def lifespan(app: FastAPI):
     """
     logger.info("Starting application...")
 
-    # 初始化数据库
+    # 初始化数据库（同步引擎，先于异步引擎）
     try:
         from app.infrastructure.database.connection import init_db
         init_db()
         logger.info("Database initialized")
     except Exception as e:
         logger.warning(f"Failed to initialize database: {e}")
+
+    # 初始化异步数据库引擎（必须在事件循环运行后）
+    try:
+        from app.infrastructure.database.connection import init_async_engine
+        await init_async_engine()
+        logger.info("Async database engine initialized")
+    except Exception as e:
+        logger.warning(f"Failed to initialize async database engine: {e}")
 
     # 初始化 Redis
     try:
@@ -58,13 +67,15 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.warning(f"Failed to initialize OSS: {e}")
 
-    # 初始化 Firebase
+    # 初始化 OSS CORS（解决前端直传跨域问题）
     try:
-        from app.services.firebase_service import init_firebase
-        init_firebase()
-        logger.info("Firebase initialized")
+        from app.infrastructure.storage.oss_client import init_oss_cors
+        init_oss_cors()
+        logger.info("OSS CORS initialized")
     except Exception as e:
-        logger.warning(f"Failed to initialize Firebase: {e}")
+        logger.warning(f"Failed to initialize OSS CORS: {e}")
+
+    # Firebase 按需初始化（首次使用时自动初始化）
 
     logger.info("Application started successfully")
 
@@ -104,7 +115,7 @@ app = FastAPI(
     debug=settings.app.debug,
     description="Wizyelab AI-powered sports assistant API",
     lifespan=lifespan,
-    docs_url="/docs" if settings.app.debug else None,
+    docs_url=None,  # 使用自定义 Swagger UI
     redoc_url=None,  # 使用自定义 redoc 路由
 )
 
@@ -122,8 +133,19 @@ setup_health_check(app)
 app.include_router(api_router, prefix=settings.app.api_prefix)
 
 
-# 自定义 ReDoc 路由，使用国内 CDN
+# 自定义 Swagger UI 和 ReDoc 路由，使用国内 CDN
 if settings.app.debug:
+    from fastapi.openapi.docs import get_swagger_ui_html, get_redoc_html
+
+    @app.get("/docs", include_in_schema=False)
+    async def custom_swagger_ui():
+        return get_swagger_ui_html(
+            openapi_url=app.openapi_url,
+            title=f"{settings.app.name} - Swagger UI",
+            swagger_js_url="https://registry.npmmirror.com/swagger-ui-dist/latest/files/swagger-ui-bundle.js",
+            swagger_css_url="https://registry.npmmirror.com/swagger-ui-dist/latest/files/swagger-ui.css",
+        )
+
     @app.get("/redoc", include_in_schema=False)
     async def custom_redoc():
         return HTMLResponse("""

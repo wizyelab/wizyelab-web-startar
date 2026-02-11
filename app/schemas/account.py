@@ -2,6 +2,7 @@
 
 from typing import Optional
 from pydantic import BaseModel, Field
+from app.core.error_codes import ErrorCode, ErrorMessage  # noqa: F401
 
 
 # ========================= 公共模型 =========================
@@ -66,59 +67,3 @@ class LogoutRequest(BaseModel):
     user_id: str = Field(..., description="用户ID")
     device_info: Optional[DeviceInfo] = Field(default=None, description="设备信息")
 
-
-# ========================= 错误码定义 =========================
-
-
-class ErrorCode:
-    """Account模块错误码定义"""
-
-    SUCCESS = 0
-    GENERAL_ERROR = 1
-    INVALID_PARAMS = 100
-    UNAUTHORIZED = 401
-    FORBIDDEN = 403
-    NOT_FOUND = 404
-
-    # 账户相关错误码 1000-1999
-    INVALID_TOKEN = 1001
-    TOKEN_EXPIRED = 1002
-    INVALID_VERIFY_CODE = 1003
-    VERIFY_CODE_EXPIRED = 1004
-    EMAIL_SEND_FAILED = 1005
-    USER_NOT_FOUND = 1006
-    USER_DISABLED = 1007
-    DEVICE_NOT_FOUND = 1008
-
-    # Firebase相关错误码 2000-2999
-    FIREBASE_AUTH_ERROR = 2001
-    FIREBASE_TOKEN_INVALID = 2002
-    FIREBASE_USER_NOT_FOUND = 2003
-
-
-class ErrorMessage:
-    """错误消息映射"""
-
-    messages = {
-        ErrorCode.SUCCESS: "成功",
-        ErrorCode.GENERAL_ERROR: "系统错误",
-        ErrorCode.INVALID_PARAMS: "参数错误",
-        ErrorCode.UNAUTHORIZED: "未授权",
-        ErrorCode.FORBIDDEN: "禁止访问",
-        ErrorCode.NOT_FOUND: "资源不存在",
-        ErrorCode.INVALID_TOKEN: "无效的Token",
-        ErrorCode.TOKEN_EXPIRED: "Token已过期",
-        ErrorCode.INVALID_VERIFY_CODE: "验证码错误",
-        ErrorCode.VERIFY_CODE_EXPIRED: "验证码已过期",
-        ErrorCode.EMAIL_SEND_FAILED: "邮件发送失败",
-        ErrorCode.USER_NOT_FOUND: "用户不存在",
-        ErrorCode.USER_DISABLED: "用户已禁用",
-        ErrorCode.DEVICE_NOT_FOUND: "设备信息不存在",
-        ErrorCode.FIREBASE_AUTH_ERROR: "Firebase认证错误",
-        ErrorCode.FIREBASE_TOKEN_INVALID: "Firebase Token无效",
-        ErrorCode.FIREBASE_USER_NOT_FOUND: "Firebase用户不存在",
-    }
-
-    @classmethod
-    def get(cls, code: int) -> str:
-        return cls.messages.get(code, "未知错误")

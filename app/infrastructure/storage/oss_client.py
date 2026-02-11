@@ -786,6 +786,33 @@ class OSSClient:
             return f"{prefix}/{filename}"
         return filename
 
+    def set_bucket_cors(self, allowed_origins: Optional[List[str]] = None) -> None:
+        """
+        设置 Bucket CORS 规则（解决前端直传跨域问题）
+
+        Args:
+            allowed_origins: 允许的来源列表，默认为 ['*']
+        """
+        try:
+            origins = allowed_origins or ["*"]
+
+            rule = oss2.models.CorsRule(
+                allowed_origins=origins,
+                allowed_methods=["GET", "POST", "PUT", "DELETE", "HEAD"],
+                allowed_headers=["*"],
+                expose_headers=[
+                    "ETag", "x-oss-request-id", "Content-Length",
+                    "Content-Type", "Content-Disposition"
+                ],
+                max_age_seconds=3600,
+            )
+
+            self.bucket.put_bucket_cors(oss2.models.BucketCors([rule]))
+            logger.info(f"OSS CORS rules set successfully, allowed_origins: {origins}")
+
+        except Exception as e:
+            logger.error(f"Failed to set OSS CORS rules: {e}")
+
 
 # 全局 OSS 客户端实例
 oss_client = OSSClient()
@@ -794,6 +821,20 @@ oss_client = OSSClient()
 def init_oss() -> None:
     """初始化全局 OSS 客户端"""
     oss_client.init()
+
+
+def init_oss_cors(allowed_origins: Optional[List[str]] = None) -> None:
+    """
+    初始化 OSS CORS 规则（解决前端直传跨域问题）
+
+    Args:
+        allowed_origins: 允许的来源列表，如 ['http://localhost:3000', 'https://example.com']
+                        默认为 ['*'] 允许所有来源
+    """
+    if not oss_client._initialized:
+        oss_client.init()
+    if oss_client._initialized:
+        oss_client.set_bucket_cors(allowed_origins=allowed_origins)
 
 
 def close_oss() -> None:

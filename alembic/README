@@ -1,0 +1,64 @@
+# Alembic 数据库迁移
+
+基于 SQLAlchemy Model 定义，版本化管理数据库 schema 变更。
+
+## 配置说明
+
+- `alembic.ini` — Alembic 主配置文件（位于项目根目录）
+- `alembic/env.py` — 运行环境配置，从 `app.core.config` 动态读取数据库连接
+- `alembic/versions/` — 迁移版本文件目录
+
+数据库 URL 无需手动配置，`env.py` 会自动读取项目 `configs/{env}.yaml` 中的数据库配置。
+
+## 常用命令
+
+```bash
+# 查看当前数据库版本
+./venv/bin/alembic current
+
+# 查看迁移历史
+./venv/bin/alembic history
+
+# 修改 Model 后，自动生成迁移脚本
+./venv/bin/alembic revision --autogenerate -m "add xxx field to yyy table"
+
+# 手动创建空迁移脚本（用于数据迁移等无法自动检测的场景）
+./venv/bin/alembic revision -m "migrate data for xxx"
+
+# 执行迁移到最新版本
+./venv/bin/alembic upgrade head
+
+# 回退一个版本
+./venv/bin/alembic downgrade -1
+
+# 回退到指定版本
+./venv/bin/alembic downgrade <revision_id>
+
+# 生成 SQL 脚本而不执行（离线模式，用于 DBA 审核）
+./venv/bin/alembic upgrade head --sql
+```
+
+## 开发流程
+
+1. 修改 `app/models/` 下的 Model 定义（新增表、加字段、改索引等）
+2. 运行 `alembic revision --autogenerate -m "描述"` 生成迁移脚本
+3. 检查生成的 `alembic/versions/xxx_描述.py`，确认 upgrade/downgrade 逻辑正确
+4. 运行 `alembic upgrade head` 执行迁移
+5. 将迁移文件提交到 Git
+
+## 新增 Model 文件
+
+如果新建了 `app/models/xxx.py`，需要在 `alembic/env.py` 中添加导入：
+
+```python
+import app.models.xxx  # noqa: F401
+```
+
+否则 autogenerate 无法检测到新 Model 的变更。
+
+## 注意事项
+
+- autogenerate 能检测：新增/删除表、新增/删除列、索引变更、列类型变更等
+- autogenerate 不能检测：表名重命名、列名重命名、数据迁移 — 这些需要手动编写
+- 生成的迁移脚本务必 review 后再执行，autogenerate 不保证 100% 正确
+- 生产环境部署前建议先用 `--sql` 生成 SQL 交由 DBA 审核

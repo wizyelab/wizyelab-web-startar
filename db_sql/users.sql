@@ -1,0 +1,26 @@
+-- 用户信息表
+CREATE TABLE `users` (
+  `id` bigint(20) unsigned NOT NULL AUTO_INCREMENT COMMENT '自增主键',
+  `user_id` varchar(20) NOT NULL COMMENT '用户ID（UUID）',
+  `firebase_uid` varchar(128) DEFAULT NULL COMMENT 'Firebase UID',
+  `phone` varchar(20) DEFAULT NULL COMMENT '手机号',
+  `email` varchar(255) DEFAULT NULL COMMENT '邮箱',
+  `user_name` varchar(50) DEFAULT NULL COMMENT '用户名',
+  `avatar` varchar(500) DEFAULT NULL COMMENT '头像URL',
+  `bio` varchar(500) DEFAULT NULL COMMENT '个人简介',
+  `gender` tinyint(1) unsigned NOT NULL DEFAULT '0' COMMENT '性别：0-未知，1-男，2-女，3-其他',
+  `location` varchar(100) DEFAULT NULL COMMENT '位置',
+  `login_provider` varchar(20) DEFAULT NULL COMMENT '登录方式：google/apple/email/phone',
+  `provider_token` text COMMENT '第三方登录Token',
+  `onboarding` json DEFAULT NULL COMMENT '用户onboarding数据',
+  `status` tinyint(1) unsigned NOT NULL DEFAULT '1' COMMENT '状态：0-删除，1-正常',
+  `extra` text COMMENT '扩展字段',
+  `create_time` bigint(20) unsigned NOT NULL COMMENT '创建时间',
+  `update_time` bigint(20) unsigned NOT NULL COMMENT '更新时间',
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_user_id` (`user_id`),
+  UNIQUE KEY `uk_firebase_uid` (`firebase_uid`),
+  UNIQUE KEY `uk_phone` (`phone`),
+  UNIQUE KEY `uk_email` (`email`),
+  KEY `idx_create_time` (`create_time`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='用户信息表';

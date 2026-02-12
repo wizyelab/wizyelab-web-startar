@@ -13,6 +13,8 @@ from typing import Callable, Optional, Tuple
 
 from fastapi import FastAPI, Request, Response
 from fastapi.responses import JSONResponse
+
+from app.core.config import PROJECT_NAME
 from starlette.middleware.base import BaseHTTPMiddleware
 
 from app.core.config import settings
@@ -159,7 +161,7 @@ class RateLimiter:
         limit, window = self._get_limit_for_path(path)
 
         # 构造 Redis key
-        key = f"wizyelab:ratelimit:{identifier}:{path}"
+        key = f"{PROJECT_NAME}:ratelimit:{identifier}:{path}"
 
         redis = await self._get_redis()
         if redis is None:
@@ -232,7 +234,7 @@ class RateLimiter:
 
         # 构造 Redis key（使用时间窗口）
         window_key = int(time.time() / window)
-        key = f"wizyelab:ratelimit:{identifier}:{path}:{window_key}"
+        key = f"{PROJECT_NAME}:ratelimit:{identifier}:{path}:{window_key}"
 
         redis = await self._get_redis()
         if redis is None:

@@ -13,8 +13,8 @@ version: '3.8'
 
 services:
   app:
-    image: registry.cn-hangzhou.aliyuncs.com/wizyelab/wizyelab-web-start:${IMAGE_TAG:-latest}
-    container_name: wizyelab-web-start-${WIZYELAB_ENV:-staging}
+    image: registry.cn-hangzhou.aliyuncs.com/${APP_PROJECT_NAME:-wizyelab}/${APP_PROJECT_NAME:-wizyelab}-web-start:${IMAGE_TAG:-latest}
+    container_name: ${APP_PROJECT_NAME:-wizyelab}-web-start-${WIZYELAB_ENV:-staging}
     ports:
       - "${APP_PORT:-8000}:8000"
     environment:
@@ -24,7 +24,7 @@ services:
       - WIZYELAB_DATABASE_PORT=${WIZYELAB_DATABASE_PORT:-3306}
       - WIZYELAB_DATABASE_USER=${WIZYELAB_DATABASE_USER}
       - WIZYELAB_DATABASE_PASSWORD=${WIZYELAB_DATABASE_PASSWORD}
-      - WIZYELAB_DATABASE_NAME=${WIZYELAB_DATABASE_NAME:-wizyelab_${WIZYELAB_ENV:-staging}}
+      - WIZYELAB_DATABASE_NAME=${WIZYELAB_DATABASE_NAME:-${APP_PROJECT_NAME:-wizyelab}_${WIZYELAB_ENV:-staging}}
       # Redis 配置
       - WIZYELAB_REDIS_HOST=${WIZYELAB_REDIS_HOST}
       - WIZYELAB_REDIS_PORT=${WIZYELAB_REDIS_PORT:-6379}
@@ -40,6 +40,9 @@ services:
       - WIZYELAB_LLM_API_KEY=${WIZYELAB_LLM_API_KEY}
       # 应用配置
       - WIZYELAB_APP_SECRET_KEY=${WIZYELAB_APP_SECRET_KEY}
+      # 项目名称
+      - APP_PROJECT_NAME=${APP_PROJECT_NAME:-wizyelab}
+      - APP_PROJECT_DISPLAY_NAME=${APP_PROJECT_DISPLAY_NAME:-Wizyelab}
     volumes:
       - ${LOG_PATH:-./logs}:/app/logs
     healthcheck:
@@ -49,7 +52,7 @@ services:
       retries: 3
       start_period: ${HEALTH_START_PERIOD:-10s}
     networks:
-      - wizyelab-network
+      - ${APP_PROJECT_NAME:-wizyelab}-network
     restart: ${RESTART_POLICY:-unless-stopped}
     deploy:
       resources:
@@ -75,5 +78,5 @@ services:
         max-file: "${LOG_MAX_FILE:-3}"
 
 networks:
-  wizyelab-network:
+  ${APP_PROJECT_NAME:-wizyelab}-network:
     driver: bridge

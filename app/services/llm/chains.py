@@ -12,7 +12,7 @@ from langchain_core.runnables import RunnablePassthrough, RunnableLambda
 from langchain.chains import ConversationChain, LLMChain
 from langchain_core.language_models.chat_models import BaseChatModel
 
-from app.core.config import settings
+from app.core.config import settings, PROJECT_DISPLAY_NAME
 from app.services.llm.llm_client import get_chat_model
 from app.services.llm.memory import ConversationMemory, get_memory
 from app.core.logging import setup_logger
@@ -39,7 +39,7 @@ def create_conversation_chain(
     llm = llm or get_chat_model()
     memory = memory or get_memory()
 
-    default_system_prompt = """你是 Wizyelab 智能助手，专注于运动装备推荐和运动技能提升。
+    default_system_prompt = f"""你是 {PROJECT_DISPLAY_NAME} 智能助手，专注于运动装备推荐和运动技能提升。
 你可以帮助用户:
 1. 推荐合适的运动装备（如网球拍、球鞋等）
 2. 分析运动视频，提供技术改进建议

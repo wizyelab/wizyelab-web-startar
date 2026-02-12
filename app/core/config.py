@@ -14,6 +14,16 @@ env = load_dotenv()
 # 支持的环境列表
 VALID_ENVIRONMENTS = ("dev", "staging", "prod")
 
+# 项目名称 (框架复用时修改 .env 中的 APP_PROJECT_NAME 即可)
+PROJECT_NAME = os.environ.get("APP_PROJECT_NAME", "wizyelab")
+PROJECT_DISPLAY_NAME = os.environ.get("APP_PROJECT_DISPLAY_NAME", "Wizyelab")
+
+
+class ProjectConfig(BaseSettings):
+    """项目配置 - 框架复用时修改此处"""
+    name: str = PROJECT_NAME
+    display_name: str = PROJECT_DISPLAY_NAME
+
 
 class ServerConfig(BaseSettings):
     """服务器配置"""
@@ -26,10 +36,10 @@ class ServerConfig(BaseSettings):
 
 class AppConfig(BaseSettings):
     """应用配置"""
-    name: str = "wizyelab-web-start"
+    name: str = f"{PROJECT_NAME}-web-start"
     version: str = "0.1.0"
     debug: bool = True
-    api_prefix: str = "/api"
+    api_prefix: str = f"/{PROJECT_NAME}/api"
     secret_key: str = "your-super-secret-key-change-in-production"
     access_token_expire_minutes: int = 60
 
@@ -86,7 +96,7 @@ class LLMConfig(BaseSettings):
     max_tokens: int = 4096
     request_timeout: int = 60
     langsmith_api_key: str = ""
-    langsmith_project: str = "wizyelab-agent"
+    langsmith_project: str = f"{PROJECT_NAME}-agent"
     langsmith_tracing: bool = False
 
 
@@ -119,7 +129,7 @@ class PrometheusConfig(BaseSettings):
 class TracingConfig(BaseSettings):
     """分布式追踪配置"""
     enabled: bool = False
-    service_name: str = "wizyelab-web-start"
+    service_name: str = f"{PROJECT_NAME}-web-start"
     otlp_endpoint: str = "http://localhost:4317"
     sample_rate: float = 1.0
 
@@ -160,7 +170,7 @@ class LocalCacheConfig(BaseSettings):
 class RedisCacheConfig(BaseSettings):
     """Redis 缓存配置"""
     enabled: bool = True
-    prefix: str = "wizyelab:cache:"
+    prefix: str = f"{PROJECT_NAME}:cache:"
     default_ttl: int = 3600
 
 
@@ -198,13 +208,15 @@ class AuthConfig(BaseSettings):
         "/redoc",
         "/openapi.json",
         "/metrics",
-        "/api/v1/public",
+        f"/{PROJECT_NAME}/api/v1/public",
     ])
 
     # 不需要认证的精确路径
     public_exact_paths: List[str] = Field(default_factory=lambda: [
-        "/api/v1/internal/account/login",
-        "/api/v1/internal/account/send_verify_code",
+        f"/{PROJECT_NAME}/api/v1/internal/account/login",
+        f"/{PROJECT_NAME}/api/v1/internal/account/send_verify_code",
+        f"/{PROJECT_NAME}/api/v1/internal/profile/collect/guide_list",
+        f"/{PROJECT_NAME}/api/v1/internal/files/upload",
     ])
 
     # 未认证响应
@@ -225,7 +237,7 @@ class SMTPConfig(BaseSettings):
     user: str = ""
     password: str = ""
     from_email: str = ""
-    from_name: str = "Wizyelab"
+    from_name: str = PROJECT_DISPLAY_NAME
     use_tls: bool = True
 
 
@@ -244,8 +256,8 @@ class SnowflakeConfig(BaseSettings):
 class OSSUploadConfig(BaseSettings):
     """OSS 上传配置"""
     multipart_threshold: int = 10485760  # 10MB，超过此大小使用分片上传
-    part_size: int = 10485760  # 10MB
-    num_threads: int = 4
+    part_size: int = 104857600  # 100MB
+    num_threads: int = 5
 
 
 class OSSDownloadConfig(BaseSettings):
@@ -275,6 +287,9 @@ class Settings(BaseSettings):
 
     # 当前环境
     environment: str = "dev"
+
+    # 项目配置
+    project: ProjectConfig = Field(default_factory=ProjectConfig)
 
     # 服务器配置
     server: ServerConfig = Field(default_factory=ServerConfig)
@@ -541,6 +556,10 @@ class Settings(BaseSettings):
             配置字典
         """
         config_dict = {}
+
+        # 项目配置
+        if "project" in yaml_config:
+            config_dict["project"] = ProjectConfig(**yaml_config["project"])
 
         # 服务器配置
         if "server" in yaml_config:

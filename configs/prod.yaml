@@ -35,7 +35,7 @@ redis:
 # =============================================================================
 llm:
   api_key: "${WIZYELAB_LLM_API_KEY}"
-  langsmith_project: "wizyelab-agent-prod"
+  langsmith_project: "${APP_PROJECT_NAME}-agent-prod"
   langsmith_tracing: false
 
 # =============================================================================
@@ -52,7 +52,7 @@ logging:
   level: "WARNING"
   json_format: true
   log_to_file: true
-  log_file_path: "/var/log/wizyelab/app.log"
+  log_file_path: "/var/log/${APP_PROJECT_NAME}/app.log"
   log_max_size: 52428800  # 50MB
   log_backup_count: 10
 
@@ -64,7 +64,7 @@ monitoring:
     enabled: true
   tracing:
     enabled: true
-    service_name: "wizyelab-web-start-prod"
+    service_name: "${APP_PROJECT_NAME}-web-start-prod"
     sample_rate: 0.1
   health_check:
     enabled: true
@@ -92,7 +92,7 @@ cache:
     ttl: 600
   redis:
     enabled: true
-    prefix: "wizyelab:prod:cache:"
+    prefix: "${APP_PROJECT_NAME}:prod:cache:"
     default_ttl: 3600
 
 # =============================================================================

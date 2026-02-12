@@ -18,7 +18,9 @@ on:
 
 env:
   REGISTRY: registry.cn-hangzhou.aliyuncs.com
-  IMAGE_NAME: wizyelab/wizyelab-web-start
+  # 修改此处以适配不同项目 (格式: namespace/image-name)
+  IMAGE_NAME: ${{ vars.PROJECT_NAME || 'wizyelab' }}/${{ vars.PROJECT_NAME || 'wizyelab' }}-web-start
+  PROJECT_NAME: ${{ vars.PROJECT_NAME || 'wizyelab' }}
 
 jobs:
   build:
@@ -95,7 +97,7 @@ jobs:
           username: ${{ secrets.STAGING_USER }}
           key: ${{ secrets.STAGING_SSH_KEY }}
           script: |
-            cd /opt/wizyelab/wizyelab-web-start
+            cd /opt/${{ env.PROJECT_NAME }}/${{ env.PROJECT_NAME }}-web-start
 
             # 拉取最新镜像
             docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ needs.build.outputs.version }}
@@ -134,7 +136,7 @@ jobs:
           username: ${{ secrets.PROD_USER }}
           key: ${{ secrets.PROD_SSH_KEY }}
           script: |
-            cd /opt/wizyelab/wizyelab-web-start
+            cd /opt/${{ env.PROJECT_NAME }}/${{ env.PROJECT_NAME }}-web-start
 
             # 备份当前版本
             docker tag ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:backup || true

@@ -15,7 +15,7 @@ from langchain_core.language_models.chat_models import BaseChatModel
 from langchain_core.callbacks import CallbackManager
 from langchain.callbacks.streaming_stdout import StreamingStdOutCallbackHandler
 
-from app.core.config import settings
+from app.core.config import settings, PROJECT_DISPLAY_NAME
 from app.services.llm.llm_client import get_chat_model
 from app.services.llm.tools import get_default_tools, get_tools_by_names
 from app.services.llm.memory import ConversationMemory, get_memory
@@ -31,7 +31,7 @@ class AgentType(str, Enum):
 
 
 # 默认系统提示
-DEFAULT_SYSTEM_PROMPT = """你是 Wizyelab 智能运动助手，专注于帮助用户提升运动技能和选择合适的运动装备。
+DEFAULT_SYSTEM_PROMPT = f"""你是 {PROJECT_DISPLAY_NAME} 智能运动助手，专注于帮助用户提升运动技能和选择合适的运动装备。
 
 你的主要能力包括:
 1. **装备推荐**: 根据用户的运动水平、预算和需求，推荐最合适的运动装备

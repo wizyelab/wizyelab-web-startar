@@ -35,7 +35,7 @@ redis:
 # =============================================================================
 llm:
   api_key: "${WIZYELAB_LLM_API_KEY}"
-  langsmith_project: "wizyelab-agent-staging"
+  langsmith_project: "${APP_PROJECT_NAME}-agent-staging"
   langsmith_tracing: true
 
 # =============================================================================
@@ -59,7 +59,7 @@ logging:
 monitoring:
   tracing:
     enabled: true
-    service_name: "wizyelab-web-start-staging"
+    service_name: "${APP_PROJECT_NAME}-web-start-staging"
     sample_rate: 0.5
   health_check:
     include_details: true
@@ -80,7 +80,7 @@ rate_limit:
 # =============================================================================
 cache:
   redis:
-    prefix: "wizyelab:staging:cache:"
+    prefix: "${APP_PROJECT_NAME}:staging:cache:"
     default_ttl: 1800
 
 # =============================================================================
